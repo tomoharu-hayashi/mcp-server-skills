@@ -79,7 +79,7 @@ PRを作成したいとき
 ## インストール
 
 ```bash
-# TBD
+uv tool install . --force
 ```
 
 ## 設定
@@ -88,8 +88,10 @@ PRを作成したいとき
 {
   "mcpServers": {
     "skills": {
-      "command": "uvx",
-      "args": ["mcp-skills-server", "/path/to/skills"]
+      "command": "mcp-server-skills",
+      "env": {
+        "MCP_SKILLS_DIR": "/path/to/skills"
+      }
     }
   }
 }

@@ -1,8 +1,8 @@
 """MCPサーバーのテスト"""
 
 
-from mcp_skills_server.models import Skill, SkillSummary, SkillUpdate
-from mcp_skills_server.storage import SkillStorage
+from mcp_server_skills.models import Skill, SkillSummary, SkillUpdate
+from mcp_server_skills.storage import SkillStorage
 
 
 class TestSkillStorage:

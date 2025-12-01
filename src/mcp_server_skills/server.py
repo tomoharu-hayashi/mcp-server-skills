@@ -1,5 +1,6 @@
 """FastMCPサーバー定義"""
 
+import os
 import sys
 from pathlib import Path
 
@@ -11,7 +12,14 @@ from .storage import SkillStorage
 # グローバルなストレージインスタンス（mainで初期化）
 storage: SkillStorage | None = None
 
-mcp = FastMCP("skills")
+mcp = FastMCP(
+    "skills",
+    instructions="""スキル学習サーバー。タスク実行時の推奨フロー:
+1. search_skills(タスクのキーワード) で既存スキルを検索
+2. 見つかれば get_skill(name) で手順を取得し従う
+3. スキルがなければ自力で実行、成功したら create_skill で記録
+4. 失敗したら update_skill で注意点を追記""",
+)
 
 
 def get_storage() -> SkillStorage:
@@ -23,41 +31,32 @@ def get_storage() -> SkillStorage:
 
 @mcp.tool()
 def search_skills(query: str) -> list[SkillSummary]:
-    """タスクに関連するスキルを検索
+    """タスク開始前に関連スキルを検索。見つかったらget_skillで詳細を取得し手順に従う。
 
     Args:
-        query: 検索クエリ（スキル名や説明に含まれる文字列）
-
-    Returns:
-        マッチしたスキルの概要リスト
+        query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
     return get_storage().search_skills(query)
 
 
 @mcp.tool()
 def get_skill(name: str) -> Skill | None:
-    """スキルの詳細を取得
+    """スキルの手順・注意点を取得。contentに従って作業を進める。
 
     Args:
-        name: スキル識別名
-
-    Returns:
-        スキルの完全な情報（存在しない場合はNone）
+        name: search_skillsで見つけたスキル名
     """
     return get_storage().load_skill(name)
 
 
 @mcp.tool()
 def create_skill(name: str, description: str, instructions: str) -> Skill:
-    """新しいスキルを作成
+    """新しいスキルを記録。タスク成功後、再利用できる手順を保存する。
 
     Args:
-        name: スキル識別名
-        description: 説明・使用タイミング
-        instructions: スキルの手順・詳細（Markdown形式）
-
-    Returns:
-        作成されたスキル
+        name: kebab-case識別名（例: "deploy-staging"）
+        description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
+        instructions: 手順をMarkdownで記述
     """
     s = get_storage()
 
@@ -72,14 +71,11 @@ def create_skill(name: str, description: str, instructions: str) -> Skill:
 
 @mcp.tool()
 def update_skill(name: str, updates: SkillUpdate) -> Skill:
-    """既存スキルを更新
+    """スキルを改善。失敗から学んだ注意点や、より良い手順を追記する。
 
     Args:
-        name: スキル識別名
-        updates: 更新内容（description, allowed_tools, content）
-
-    Returns:
-        更新されたスキル
+        name: 更新するスキル名
+        updates: 変更内容（description, content等）
     """
     s = get_storage()
     skill = s.load_skill(name)
@@ -105,13 +101,13 @@ def main() -> None:
     """エントリポイント"""
     global storage
 
-    if len(sys.argv) < 2:
-        sys.stderr.write("Usage: mcp-skills-server <skills-directory>\n")
-        sys.exit(1)
+    # 環境変数 > コマンドライン引数 > デフォルト(~/.mcp-skills)
+    default_dir = Path.home() / ".mcp-skills"
+    skills_path = os.environ.get("MCP_SKILLS_DIR") or (
+        sys.argv[1] if len(sys.argv) > 1 else str(default_dir)
+    )
 
-    skills_dir = Path(sys.argv[1])
-    storage = SkillStorage(skills_dir)
-
+    storage = SkillStorage(Path(skills_path))
     mcp.run()
 
 

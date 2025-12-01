@@ -90,7 +90,7 @@ PRを作成したいとき
   "mcpServers": {
     "skills": {
       "command": "uvx",
-      "args": ["mcp-skills-server", "/path/to/skills"]
+      "args": ["mcp-server-skills", "/path/to/skills"]
     }
   }
 }
