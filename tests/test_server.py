@@ -1,6 +1,5 @@
 """MCPサーバーのテスト"""
 
-
 from mcp_skills.models import Skill, SkillSummary, SkillUpdate
 from mcp_skills.storage import SkillStorage
 
