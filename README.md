@@ -88,7 +88,8 @@ uv tool install . --force
 {
   "mcpServers": {
     "skills": {
-      "command": "mcp-skills",
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-skills.git", "mcp-server-skills"],
       "env": {
         "MCP_SKILLS_DIR": "/path/to/skills"
       }
