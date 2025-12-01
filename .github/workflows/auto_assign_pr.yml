@@ -1,0 +1,26 @@
+name: Pull Request auto assign
+
+on:
+  pull_request:
+    types: opened
+
+permissions:
+  pull-requests: write
+  repository-projects: read
+
+jobs:
+  assign:
+    name: PR auto-assign-yourself
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    # assign flow
+    steps:
+      - name: Set GitHub assignees
+        if: ${{ !contains(github.actor, 'bot') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit ${{ github.event.number }} --add-assignee ${{ github.actor }} --repo ${{ github.repository }}
