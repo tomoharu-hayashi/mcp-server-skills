@@ -14,6 +14,4 @@ applyTo: "**"
 | 説明 | ファイル |
 |------|----------|
 | Github Projectsを参照したいときに使用する | manuals/github_projects_rule.instructions.md |
-| テストに関するドキュメント。テストを作成するときに使用する | manuals/test_driven_development.instructions.md |
-| gluestack_uiに関するドキュメント | manuals/gluestack_ui.instructions.md |
 
