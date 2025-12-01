@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-skills = "mcp_server_skills.server:main"
+mcp-skills = "mcp_skills.server:main"
 
 [dependency-groups]
 dev = [
@@ -31,7 +31,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcp_server_skills"]
+packages = ["src/mcp_skills"]
 
 # ==============================================================================
 # Linter / Formatter
