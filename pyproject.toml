@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-server-skills = "mcp_server_skills.server:main"
+mcp-skills = "mcp_server_skills.server:main"
 
 [dependency-groups]
 dev = [
