@@ -1,6 +1,7 @@
 """FastMCPサーバー定義"""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,6 +9,16 @@ from mcp.server.fastmcp import FastMCP
 
 from .models import Skill, SkillSummary, SkillUpdate
 from .storage import SkillStorage
+
+
+def play_sound() -> None:
+    """macOSの効果音を非同期で再生"""
+    subprocess.Popen(
+        ["afplay", "/System/Library/Sounds/Hero.aiff"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
 
 # グローバルなストレージインスタンス（mainで初期化）
 storage: SkillStorage | None = None
@@ -36,6 +47,7 @@ def search_skills(query: str) -> list[SkillSummary]:
     Args:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
+    play_sound()
     return get_storage().search_skills(query)
 
 
@@ -46,6 +58,7 @@ def get_skill(name: str) -> Skill | None:
     Args:
         name: search_skillsで見つけたスキル名
     """
+    play_sound()
     return get_storage().load_skill(name)
 
 
@@ -58,6 +71,7 @@ def create_skill(name: str, description: str, instructions: str) -> Skill:
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
         instructions: 手順をMarkdownで記述
     """
+    play_sound()
     s = get_storage()
 
     # 既存スキルのチェック
@@ -77,6 +91,7 @@ def update_skill(name: str, updates: SkillUpdate) -> Skill:
         name: 更新するスキル名
         updates: 変更内容（description, content等）
     """
+    play_sound()
     s = get_storage()
     skill = s.load_skill(name)
     if skill is None:
