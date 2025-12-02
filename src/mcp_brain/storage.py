@@ -162,6 +162,25 @@ class KnowledgeStorage:
             return True
         return False
 
+    def get_stale(self, threshold_days: int = 30) -> list[Knowledge]:
+        """古い知識を取得（最終使用日からthreshold_days以上経過）"""
+        from datetime import date, timedelta
+
+        cutoff = date.today() - timedelta(days=threshold_days)
+        stale = []
+
+        for summary in self.list_all():
+            knowledge = self.load(summary.name)
+            if knowledge is None:
+                continue
+
+            # last_usedがなければcreatedを使用
+            last_active = knowledge.last_used or knowledge.created
+            if last_active < cutoff:
+                stale.append(knowledge)
+
+        return stale
+
     def _parse_knowledge_file(self, name: str, text: str) -> Knowledge:
         """KNOWLEDGE.mdファイルをパース"""
         frontmatter: dict = {}

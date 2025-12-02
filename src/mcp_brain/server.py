@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -12,6 +13,7 @@ from mcp.server.session import ServerSession
 
 from .git import GitManager
 from .models import Knowledge
+from .notification import show_stale_dialog
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
 
@@ -174,6 +176,10 @@ async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> di
     if knowledge is None:
         return {"error": f"Knowledge '{name}' not found"}
 
+    # last_usedを更新（忘却システム用）
+    knowledge.last_used = date.today()
+    s.save(knowledge)
+
     # Embeddingベースで類似知識を自動取得
     similar = search.find_similar(name, top_k=5)
     similar_names = [summary.name for summary, _ in similar]
@@ -274,6 +280,35 @@ async def update(
     }
 
 
+@mcp.tool()
+async def forget(name: str, ctx: Context[ServerSession, None]) -> dict:
+    """知識を削除。誤って作成した知識や不要になった知識を削除する。
+
+    Args:
+        name: 削除する知識名
+    """
+    play_sound()
+    await _with_project_scope(ctx)
+    s = get_storage()
+
+    # 存在確認
+    knowledge = s.load(name)
+    if knowledge is None:
+        return {"error": f"Knowledge '{name}' not found"}
+
+    # 検索インデックスから削除
+    get_search().remove(name)
+
+    # ファイルを削除
+    s.delete(name)
+
+    # Git commit + push
+    if git_manager:
+        git_manager.commit_and_push(name, "forget")
+
+    return {"deleted": name}
+
+
 def _load_all(s: KnowledgeStorage) -> list[Knowledge]:
     """全知識を読み込み"""
     items = []
@@ -310,6 +345,21 @@ def main() -> None:
     items = _load_all(storage)
     search_engine.build(items, background=True)
     logger.info("Search index initialization started (%d items)", len(items))
+
+    # 忘却チェック: 古い知識があればGUIで通知
+    stale = storage.get_stale(threshold_days=30)
+    if stale:
+        stale_names = [k.name for k in stale]
+        logger.info("Found %d stale knowledge items", len(stale_names))
+
+        if show_stale_dialog(stale_names):
+            # 削除を選択
+            for k in stale:
+                search_engine.remove(k.name)
+                storage.delete(k.name)
+                if git_manager:
+                    git_manager.commit_and_push(k.name, "forget")
+            logger.info("Deleted %d stale knowledge items", len(stale))
 
     mcp.run()
 
