@@ -26,12 +26,12 @@ def show_create_confirmation(name: str, description: str) -> bool:
     play_sosumi()
 
     # AppleScript でダイアログ表示
-    script = f'''
+    script = f"""
     display dialog "以下の知識を作成しますか？\n\n名前: {name}\n説明: {description}" ¬
         with title "MCP Brain: 知識の作成確認" ¬
         buttons {{"キャンセル", "作成する"}} default button "作成する" ¬
         with icon note
-    '''
+    """
 
     try:
         result = subprocess.run(
