@@ -87,10 +87,62 @@ async def _with_project_scope(ctx: Context[ServerSession, None]) -> None:
     # スコープが変わった場合のみ更新
     if s.project_path != project_path:
         s.set_project(project_path)
-        # インデックスを再構築
+        # インデックスを再構築（バックグラウンドで）
         items = _load_all(s)
-        get_search().build(items)
+        get_search().build(items, background=True)
         logger.info("Project scope: %s", project_path or "global")
+
+
+def _expand_related(
+    s: KnowledgeStorage,
+    related_names: list[str],
+    hops: int,
+    visited: set[str] | None = None,
+) -> list[dict]:
+    """関連知識をNホップ先まで展開（自動関連用）
+
+    Args:
+        s: ストレージ
+        related_names: 関連知識名のリスト
+        hops: 残りホップ数
+        visited: 訪問済み知識名（循環防止）
+
+    Returns:
+        関連知識のサマリーリスト
+    """
+    if hops <= 0 or not related_names:
+        return []
+
+    if visited is None:
+        visited = set()
+
+    search = get_search()
+    results = []
+
+    for name in related_names:
+        if name in visited:
+            continue
+        visited.add(name)
+
+        knowledge = s.load(name)
+        if knowledge is None:
+            continue
+
+        # 次のホップ: この知識に類似する知識を取得
+        next_similar_names = [
+            summary.name for summary, _ in search.find_similar(name, top_k=3)
+        ]
+        nested_related = _expand_related(s, next_similar_names, hops - 1, visited)
+
+        results.append(
+            {
+                "name": knowledge.name,
+                "description": knowledge.description,
+                "related": nested_related,
+            }
+        )
+
+    return results
 
 
 @mcp.tool()
@@ -107,22 +159,34 @@ async def search(query: str, ctx: Context[ServerSession, None]) -> list[dict]:
 
 
 @mcp.tool()
-async def get(name: str, ctx: Context[ServerSession, None]) -> dict:
+async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> dict:
     """知識の詳細（手順・注意点）を取得。contentに従って作業を進める。
 
     Args:
         name: searchで見つけた知識名
+        hops: 関連知識を辿るホップ数（デフォルト: 2）
     """
     play_sound()
     await _with_project_scope(ctx)
-    knowledge = get_storage().load(name)
+    s = get_storage()
+    search = get_search()
+    knowledge = s.load(name)
     if knowledge is None:
         return {"error": f"Knowledge '{name}' not found"}
+
+    # Embeddingベースで類似知識を自動取得
+    similar = search.find_similar(name, top_k=5)
+    similar_names = [summary.name for summary, _ in similar]
+
+    # N ホップ先まで関連知識を展開
+    related_summaries = _expand_related(s, similar_names, hops, visited={name})
+
     return {
         "name": knowledge.name,
         "description": knowledge.description,
         "content": knowledge.content,
         "version": knowledge.version,
+        "related": related_summaries,
     }
 
 
@@ -237,14 +301,15 @@ def main() -> None:
     # Git管理を初期化
     git_manager = GitManager(base_knowledge_dir)
 
-    # 検索エンジンを初期化
-    search_engine = SemanticSearch()
+    # 検索エンジンを初期化（キャッシュディレクトリを指定）
+    search_engine = SemanticSearch(cache_dir=base_knowledge_dir)
 
-    # 起動時に全知識をインデックス化（初期はglobalスコープ）
-    logger.info("Building search index...")
+    # 起動時に全知識をインデックス化
+    # キャッシュが有効ならそれを使用、無効ならバックグラウンドでビルド
+    logger.info("Initializing search index...")
     items = _load_all(storage)
-    search_engine.build(items)
-    logger.info("Search index built with %d items", len(items))
+    search_engine.build(items, background=True)
+    logger.info("Search index initialization started (%d items)", len(items))
 
     mcp.run()
 
