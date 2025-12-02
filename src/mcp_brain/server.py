@@ -37,14 +37,12 @@ base_knowledge_dir: Path | None = None
 
 mcp = FastMCP(
     "brain",
-    instructions="""知識学習サーバー。タスク実行時の推奨フロー:
-1. search(タスクのキーワード) で既存知識を検索
-2. 見つかれば get(name) で手順を取得し従う
-3. 知識がなければ自力で実行、成功したら create で記録
-4. 失敗したら update で注意点を追記
+    instructions="""AIの長期記憶。経験から学び、同じ失敗を繰り返さない。
 
-知識はプロジェクトごとに自動スコープされます。
-現在のプロジェクト固有の知識が優先され、親ディレクトリやグローバルの知識も検索されます。""",
+タスク開始時:
+1. search で過去の経験を想起
+2. 見つかれば get で思い出し、その通りに実行
+3. 新しい経験は create で記憶、失敗から学んだら update で強化""",
 )
 
 
@@ -149,7 +147,7 @@ def _expand_related(
 
 @mcp.tool()
 async def search(query: str, ctx: Context[ServerSession, None]) -> list[dict]:
-    """タスク開始前に関連知識を検索。見つかればgetで詳細を取得し手順に従う。
+    """過去の経験を想起。タスク開始前に「これ、前にやったことあるか？」と記憶を探る。
 
     Args:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
@@ -162,11 +160,11 @@ async def search(query: str, ctx: Context[ServerSession, None]) -> list[dict]:
 
 @mcp.tool()
 async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> dict:
-    """知識の詳細（手順・注意点）を取得。contentに従って作業を進める。
+    """記憶を思い出す。過去の経験の詳細を取得し、その通りに実行する。
 
     Args:
         name: searchで見つけた知識名
-        hops: 関連知識を辿るホップ数（デフォルト: 2）
+        hops: 連想する関連記憶の深さ（デフォルト: 2）
     """
     play_sound()
     await _with_project_scope(ctx)
@@ -201,6 +199,15 @@ async def create(
     name: str, description: str, instructions: str, ctx: Context[ServerSession, None]
 ) -> dict:
     """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
+
+    ここでの「経験」を記録する。AIが元々知っている一般知識ではなく、
+    実際にここで試行錯誤して得た知見や、ユーザーから教わった手順を保存する。
+
+    例:
+    - ○ ここ固有のデプロイ手順（特殊な環境変数、独自スクリプト）
+    - ○ ユーザーが「こうやって」と教えてくれたワークフロー
+    - × git の一般的な使い方（AIは既に知っている）
+    - × React公式ドキュメントに書いてある内容
 
     Args:
         name: kebab-case識別名（例: "deploy-staging"）
@@ -240,7 +247,7 @@ async def update(
     description: str | None = None,
     content: str | None = None,
 ) -> dict:
-    """知識を改善。失敗から学んだ注意点や、より良い手順を追記する。
+    """記憶を強化。失敗から学んだ教訓や、より良いやり方で上書きする。
 
     Args:
         name: 更新する知識名
@@ -282,7 +289,7 @@ async def update(
 
 @mcp.tool()
 async def forget(name: str, ctx: Context[ServerSession, None]) -> dict:
-    """知識を削除。誤って作成した知識や不要になった知識を削除する。
+    """記憶を忘却。間違った記憶や、もう必要ない経験を消去する。
 
     Args:
         name: 削除する知識名
