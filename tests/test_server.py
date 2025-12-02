@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from mcp_brain.models import Knowledge, KnowledgeSummary, KnowledgeUpdate
+from mcp_brain.models import Knowledge, KnowledgeSummary
 from mcp_brain.storage import (
     GLOBAL_SCOPE,
     KnowledgeStorage,
@@ -106,13 +106,6 @@ class TestModels:
         assert isinstance(summary, KnowledgeSummary)
         assert summary.name == "test"
         assert summary.description == "テスト"
-
-    def test_knowledge_update_partial(self):
-        """部分更新"""
-        update = KnowledgeUpdate(description="新しい説明")
-        assert update.description == "新しい説明"
-        assert update.content is None
-        assert update.allowed_tools is None
 
 
 class TestScopeHierarchy:

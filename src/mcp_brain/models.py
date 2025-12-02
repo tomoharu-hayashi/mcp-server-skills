@@ -32,11 +32,3 @@ class Knowledge(BaseModel):
     def to_summary(self) -> KnowledgeSummary:
         """概要に変換"""
         return KnowledgeSummary(name=self.name, description=self.description)
-
-
-class KnowledgeUpdate(BaseModel):
-    """知識更新用のパラメータ"""
-
-    description: str | None = Field(default=None, description="説明・使用タイミング")
-    allowed_tools: str | None = Field(default=None, description="ツール制限")
-    content: str | None = Field(default=None, description="知識の手順・詳細")

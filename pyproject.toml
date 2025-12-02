@@ -6,7 +6,7 @@ name = "mcp-brain"
 version = "0.1.0"
 description = "AIエージェントに統合的な知識を提供するMCPサーバー"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "mcp[cli]>=1.0.0",
     "pydantic>=2.0.0",
