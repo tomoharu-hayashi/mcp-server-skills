@@ -1,4 +1,4 @@
-"""Skillの自動Git管理"""
+"""知識の自動Git管理"""
 
 import logging
 from pathlib import Path
@@ -10,28 +10,28 @@ logger = logging.getLogger(__name__)
 
 
 class GitManager:
-    """Skillの自動Git管理"""
+    """知識の自動Git管理"""
 
-    def __init__(self, skills_dir: Path) -> None:
-        self.skills_dir = skills_dir
+    def __init__(self, knowledge_dir: Path) -> None:
+        self.knowledge_dir = knowledge_dir
         self.repo: Repo | None = None
         self._init_repo()
 
     def _init_repo(self) -> None:
         """リポジトリを初期化"""
         try:
-            self.repo = Repo(self.skills_dir)
+            self.repo = Repo(self.knowledge_dir)
         except InvalidGitRepositoryError:
             logger.warning(
-                "Skills directory is not a git repository: %s", self.skills_dir
+                "Knowledge directory is not a git repository: %s", self.knowledge_dir
             )
             self.repo = None
 
-    def commit_and_push(self, skill_name: str, action: str) -> bool:
+    def commit_and_push(self, name: str, action: str) -> bool:
         """変更をcommit + push
 
         Args:
-            skill_name: スキル名
+            name: 知識名
             action: 操作（create, update, delete）
 
         Returns:
@@ -43,14 +43,14 @@ class GitManager:
 
         try:
             # ファイルをステージング
-            skill_path = f"{skill_name}/SKILL.md"
+            knowledge_path = f"{name}/KNOWLEDGE.md"
             if action == "delete":
-                self.repo.index.remove([skill_path], working_tree=True)
+                self.repo.index.remove([knowledge_path], working_tree=True)
             else:
-                self.repo.index.add([skill_path])
+                self.repo.index.add([knowledge_path])
 
             # コミット
-            message = f"{action}: {skill_name}"
+            message = f"{action}: {name}"
             self.repo.index.commit(message)
             logger.info("Committed: %s", message)
 
@@ -73,4 +73,3 @@ class GitManager:
             logger.info("Pushed to origin")
         except (ValueError, GitCommandError) as e:
             logger.warning("Push failed (no remote or error): %s", e)
-

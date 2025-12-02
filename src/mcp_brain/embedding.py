@@ -3,7 +3,7 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from mcp_skills.models import Skill
+from mcp_brain.models import Knowledge
 
 # ruri-v3はquery prefixを使用
 QUERY_PREFIX = "クエリ: "
@@ -17,22 +17,22 @@ class EmbeddingIndex:
         self.model_name = model_name
         self.model: SentenceTransformer | None = None
         self.embeddings: dict[str, np.ndarray] = {}
-        self.skill_texts: dict[str, str] = {}
+        self.knowledge_texts: dict[str, str] = {}
 
     def _load_model(self) -> None:
         """モデルを遅延ロード"""
         if self.model is None:
             self.model = SentenceTransformer(self.model_name)
 
-    def _skill_to_text(self, skill: Skill) -> str:
-        """スキルを検索用テキストに変換"""
-        return f"{skill.name}\n{skill.description}\n{skill.content}"
+    def _knowledge_to_text(self, knowledge: Knowledge) -> str:
+        """知識を検索用テキストに変換"""
+        return f"{knowledge.name}\n{knowledge.description}\n{knowledge.content}"
 
-    def build(self, skills: list[Skill]) -> None:
-        """全スキルからインデックスを構築"""
-        if not skills:
+    def build(self, items: list[Knowledge]) -> None:
+        """全知識からインデックスを構築"""
+        if not items:
             self.embeddings = {}
-            self.skill_texts = {}
+            self.knowledge_texts = {}
             return
 
         self._load_model()
@@ -40,11 +40,11 @@ class EmbeddingIndex:
 
         texts = []
         names = []
-        for skill in skills:
-            text = self._skill_to_text(skill)
+        for knowledge in items:
+            text = self._knowledge_to_text(knowledge)
             texts.append(PASSAGE_PREFIX + text)
-            names.append(skill.name)
-            self.skill_texts[skill.name] = text
+            names.append(knowledge.name)
+            self.knowledge_texts[knowledge.name] = text
 
         # バッチエンコード
         vectors = self.model.encode(
@@ -52,39 +52,39 @@ class EmbeddingIndex:
         )
         self.embeddings = dict(zip(names, vectors, strict=True))
 
-    def rebuild(self, skills: list[Skill], model_name: str | None = None) -> None:
+    def rebuild(self, items: list[Knowledge], model_name: str | None = None) -> None:
         """再インデックス（モデル切り替え対応）"""
         if model_name and model_name != self.model_name:
             self.model_name = model_name
             self.model = None  # 次回ロード時に新モデルをロード
-        self.build(skills)
+        self.build(items)
 
-    def add(self, skill: Skill) -> None:
-        """スキルをインデックスに追加"""
+    def add(self, knowledge: Knowledge) -> None:
+        """知識をインデックスに追加"""
         self._load_model()
         assert self.model is not None
 
-        text = self._skill_to_text(skill)
-        self.skill_texts[skill.name] = text
+        text = self._knowledge_to_text(knowledge)
+        self.knowledge_texts[knowledge.name] = text
         vector = self.model.encode(
             PASSAGE_PREFIX + text, convert_to_numpy=True, show_progress_bar=False
         )
-        self.embeddings[skill.name] = vector
+        self.embeddings[knowledge.name] = vector
 
-    def update(self, skill: Skill) -> None:
-        """スキルのインデックスを更新"""
-        self.add(skill)
+    def update(self, knowledge: Knowledge) -> None:
+        """知識のインデックスを更新"""
+        self.add(knowledge)
 
-    def remove(self, skill_name: str) -> None:
-        """スキルをインデックスから削除"""
-        self.embeddings.pop(skill_name, None)
-        self.skill_texts.pop(skill_name, None)
+    def remove(self, name: str) -> None:
+        """知識をインデックスから削除"""
+        self.embeddings.pop(name, None)
+        self.knowledge_texts.pop(name, None)
 
     def search(self, query: str, top_k: int = 10) -> list[tuple[str, float]]:
         """セマンティック検索
 
         Returns:
-            (skill_name, score) のリスト（スコア降順）
+            (name, score) のリスト（スコア降順）
         """
         if not self.embeddings:
             return []

@@ -1,10 +1,10 @@
-# MCP Skills Server
+# MCP Brain Server
 
-AIエージェントに「学習可能なスキル」を提供するMCPサーバー
+AIエージェントに「統合的な知識」を提供するMCPサーバー
 
 ## コンセプト
 
-**人間が仕事を覚えるように、AIもスキルを学習する**
+**人間が仕事を覚えるように、AIも知識を学習する**
 
 人間が仕事を習得するプロセス:
 
@@ -18,29 +18,29 @@ AIエージェントに「学習可能なスキル」を提供するMCPサーバ
 
 ## 機能
 
-### スキルの参照
+### 知識の参照
 
-- タスクに関連するスキルを検索
-- スキルの詳細（手順・注意点）を取得
-- Claude Code Agent Skills形式と互換
+- タスクに関連する知識を検索
+- 知識の詳細（手順・注意点）を取得
 
-### スキルの学習
+### 知識の学習
 
 - 実行結果の記録（成功/失敗）
-- 失敗からの改善点をスキルに反映
-- 新しいスキルの自動生成
+- 失敗からの改善点を知識に反映
+- 新しい知識の自動生成
 
 ### 将来実装
 
-- **セマンティック検索**: キーワードではなく意味でスキルを検索（人間の連想に近い）
-- **自動削除（忘却）**: 使用頻度の低いスキルを自動でアーカイブ・削除
+- **セマンティック検索**: キーワードではなく意味で知識を検索（人間の連想に近い）
+- **自動削除（忘却）**: 使用頻度の低い知識を自動でアーカイブ・削除
+- **事実・記憶・関連付け**: 手順以外の知識も統合的に管理
 
-## スキルの構造
+## 知識の構造
 
 ```
-skills/
-└── {skill-name}/
-    └── SKILL.md
+knowledge/
+└── {knowledge-name}/
+    └── KNOWLEDGE.md
 ```
 
 ```yaml
@@ -48,8 +48,6 @@ skills/
 name: create-pr
 version: 1
 created: 2025-12-01
-success_count: 0
-failure_count: 0
 ---
 ```
 
@@ -68,13 +66,12 @@ PRを作成したいとき
 
 ## Tools
 
-| Tool | 説明 |
-|------|------|
-| `search_skills` | タスクに関連するスキルを検索 |
-| `get_skill` | スキルの詳細を取得 |
-| `create_skill` | 新しいスキルを作成 |
-| `update_skill` | 既存スキルを更新 |
-| `record_execution` | 実行結果を記録 |
+| Tool     | 説明                         |
+| -------- | ---------------------------- |
+| `search` | タスクに関連する知識を検索   |
+| `get`    | 知識の詳細を取得             |
+| `create` | 新しい知識を作成             |
+| `update` | 既存の知識を更新             |
 
 ## インストール
 
@@ -87,11 +84,11 @@ uv tool install . --force
 ```json
 {
   "mcpServers": {
-    "skills": {
+    "brain": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-skills.git", "mcp-server-skills"],
+      "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
       "env": {
-        "MCP_SKILLS_DIR": "/path/to/skills"
+        "MCP_BRAIN_DIR": "/path/to/knowledge"
       }
     }
   }

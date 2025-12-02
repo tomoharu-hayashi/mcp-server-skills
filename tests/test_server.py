@@ -1,90 +1,90 @@
 """MCPサーバーのテスト"""
 
-from mcp_skills.models import Skill, SkillSummary, SkillUpdate
-from mcp_skills.storage import SkillStorage
+from mcp_brain.models import Knowledge, KnowledgeSummary, KnowledgeUpdate
+from mcp_brain.storage import KnowledgeStorage
 
 
-class TestSkillStorage:
+class TestKnowledgeStorage:
     """ストレージ層のテスト"""
 
-    def test_save_and_load_skill(self, tmp_path):
-        """スキルの保存と読み込み"""
-        storage = SkillStorage(tmp_path / "skills")
+    def test_save_and_load(self, tmp_path):
+        """知識の保存と読み込み"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        skill = Skill(
-            name="test-skill",
-            description="テスト用スキル",
+        knowledge = Knowledge(
+            name="test-knowledge",
+            description="テスト用知識",
             content="## 手順\n1. テストを実行",
         )
-        storage.save_skill(skill)
+        storage.save(knowledge)
 
-        loaded = storage.load_skill("test-skill")
+        loaded = storage.load("test-knowledge")
         assert loaded is not None
-        assert loaded.name == "test-skill"
-        assert loaded.description == "テスト用スキル"
+        assert loaded.name == "test-knowledge"
+        assert loaded.description == "テスト用知識"
         assert "テストを実行" in loaded.content
 
-    def test_list_skills(self, tmp_path):
-        """スキル一覧の取得"""
-        storage = SkillStorage(tmp_path / "skills")
+    def test_list_all(self, tmp_path):
+        """知識一覧の取得"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        storage.save_skill(Skill(name="skill-a", description="スキルA"))
-        storage.save_skill(Skill(name="skill-b", description="スキルB"))
+        storage.save(Knowledge(name="knowledge-a", description="知識A"))
+        storage.save(Knowledge(name="knowledge-b", description="知識B"))
 
-        skills = storage.list_skills()
-        assert len(skills) == 2
-        names = {s.name for s in skills}
-        assert names == {"skill-a", "skill-b"}
+        items = storage.list_all()
+        assert len(items) == 2
+        names = {k.name for k in items}
+        assert names == {"knowledge-a", "knowledge-b"}
 
-    def test_search_skills(self, tmp_path):
-        """スキル検索"""
-        storage = SkillStorage(tmp_path / "skills")
+    def test_search(self, tmp_path):
+        """知識検索"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        storage.save_skill(Skill(name="create-pr", description="PRを作成したいとき"))
-        storage.save_skill(
-            Skill(name="review-pr", description="PRをレビューしたいとき")
+        storage.save(Knowledge(name="create-pr", description="PRを作成したいとき"))
+        storage.save(
+            Knowledge(name="review-pr", description="PRをレビューしたいとき")
         )
-        storage.save_skill(
-            Skill(name="run-tests", description="テストを実行したいとき")
+        storage.save(
+            Knowledge(name="run-tests", description="テストを実行したいとき")
         )
 
         # 名前で検索
-        results = storage.search_skills("pr")
+        results = storage.search("pr")
         assert len(results) == 2
 
         # 説明で検索
-        results = storage.search_skills("テスト")
+        results = storage.search("テスト")
         assert len(results) == 1
         assert results[0].name == "run-tests"
 
-    def test_delete_skill(self, tmp_path):
-        """スキルの削除"""
-        storage = SkillStorage(tmp_path / "skills")
+    def test_delete(self, tmp_path):
+        """知識の削除"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        storage.save_skill(Skill(name="to-delete", description="削除対象"))
-        assert storage.load_skill("to-delete") is not None
+        storage.save(Knowledge(name="to-delete", description="削除対象"))
+        assert storage.load("to-delete") is not None
 
-        result = storage.delete_skill("to-delete")
+        result = storage.delete("to-delete")
         assert result is True
-        assert storage.load_skill("to-delete") is None
+        assert storage.load("to-delete") is None
 
-    def test_load_nonexistent_skill(self, tmp_path):
-        """存在しないスキルの読み込み"""
-        storage = SkillStorage(tmp_path / "skills")
-        assert storage.load_skill("nonexistent") is None
+    def test_load_nonexistent(self, tmp_path):
+        """存在しない知識の読み込み"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        assert storage.load("nonexistent") is None
 
     def test_allowed_tools_field(self, tmp_path):
         """allowed-toolsフィールドの読み書き"""
-        storage = SkillStorage(tmp_path / "skills")
+        storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        skill = Skill(
+        knowledge = Knowledge(
             name="with-tools",
             description="ツール制限あり",
             allowed_tools="Bash",
         )
-        storage.save_skill(skill)
+        storage.save(knowledge)
 
-        loaded = storage.load_skill("with-tools")
+        loaded = storage.load("with-tools")
         assert loaded is not None
         assert loaded.allowed_tools == "Bash"
 
@@ -92,21 +92,21 @@ class TestSkillStorage:
 class TestModels:
     """モデルのテスト"""
 
-    def test_skill_to_summary(self):
-        """Skillから概要への変換"""
-        skill = Skill(
+    def test_knowledge_to_summary(self):
+        """Knowledgeから概要への変換"""
+        knowledge = Knowledge(
             name="test",
             description="テスト",
             content="詳細",
         )
-        summary = skill.to_summary()
-        assert isinstance(summary, SkillSummary)
+        summary = knowledge.to_summary()
+        assert isinstance(summary, KnowledgeSummary)
         assert summary.name == "test"
         assert summary.description == "テスト"
 
-    def test_skill_update_partial(self):
+    def test_knowledge_update_partial(self):
         """部分更新"""
-        update = SkillUpdate(description="新しい説明")
+        update = KnowledgeUpdate(description="新しい説明")
         assert update.description == "新しい説明"
         assert update.content is None
         assert update.allowed_tools is None

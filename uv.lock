@@ -572,7 +572,7 @@ cli = [
 ]
 
 [[package]]
-name = "mcp-server-skills"
+name = "mcp-server-brain"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
