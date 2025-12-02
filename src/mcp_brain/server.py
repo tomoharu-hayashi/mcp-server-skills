@@ -5,8 +5,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 
 from .git import GitManager
 from .models import Knowledge
@@ -29,6 +31,7 @@ def play_sound() -> None:
 storage: KnowledgeStorage | None = None
 search_engine: SemanticSearch | None = None
 git_manager: GitManager | None = None
+base_knowledge_dir: Path | None = None
 
 mcp = FastMCP(
     "brain",
@@ -36,7 +39,10 @@ mcp = FastMCP(
 1. search(タスクのキーワード) で既存知識を検索
 2. 見つかれば get(name) で手順を取得し従う
 3. 知識がなければ自力で実行、成功したら create で記録
-4. 失敗したら update で注意点を追記""",
+4. 失敗したら update で注意点を追記
+
+知識はプロジェクトごとに自動スコープされます。
+現在のプロジェクト固有の知識が優先され、親ディレクトリやグローバルの知識も検索されます。""",
 )
 
 
@@ -54,26 +60,61 @@ def get_search() -> SemanticSearch:
     return search_engine
 
 
+def _uri_to_path(uri: str) -> Path | None:
+    """file:// URIをPathに変換"""
+    parsed = urlparse(uri)
+    if parsed.scheme == "file":
+        return Path(unquote(parsed.path))
+    return None
+
+
+async def _get_project_path(ctx: Context[ServerSession, None]) -> Path | None:
+    """クライアントのrootsからプロジェクトパスを取得"""
+    try:
+        roots_result = await ctx.session.list_roots()
+        if roots_result.roots:
+            return _uri_to_path(str(roots_result.roots[0].uri))
+    except Exception as e:
+        logger.debug("Failed to get roots: %s", e)
+    return None
+
+
+async def _with_project_scope(ctx: Context[ServerSession, None]) -> None:
+    """プロジェクトスコープを設定"""
+    project_path = await _get_project_path(ctx)
+    s = get_storage()
+
+    # スコープが変わった場合のみ更新
+    if s.project_path != project_path:
+        s.set_project(project_path)
+        # インデックスを再構築
+        items = _load_all(s)
+        get_search().build(items)
+        logger.info("Project scope: %s", project_path or "global")
+
+
 @mcp.tool()
-def search(query: str) -> list[dict]:
+async def search(query: str, ctx: Context[ServerSession, None]) -> list[dict]:
     """タスク開始前に関連知識を検索。見つかればgetで詳細を取得し手順に従う。
 
     Args:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
     play_sound()
+    await _with_project_scope(ctx)
     results = get_search().search(query)
     return [{"name": r.name, "description": r.description} for r in results]
 
 
 @mcp.tool()
-def get(name: str) -> dict:
+async def get(name: str, ctx: Context[ServerSession, None]) -> dict:
     """知識の詳細（手順・注意点）を取得。contentに従って作業を進める。
 
     Args:
         name: searchで見つけた知識名
     """
     play_sound()
+    await _with_project_scope(ctx)
     knowledge = get_storage().load(name)
     if knowledge is None:
         return {"error": f"Knowledge '{name}' not found"}
@@ -86,7 +127,9 @@ def get(name: str) -> dict:
 
 
 @mcp.tool()
-def create(name: str, description: str, instructions: str) -> dict:
+async def create(
+    name: str, description: str, instructions: str, ctx: Context[ServerSession, None]
+) -> dict:
     """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
 
     Args:
@@ -95,6 +138,7 @@ def create(name: str, description: str, instructions: str) -> dict:
         instructions: 手順をMarkdownで記述
     """
     play_sound()
+    await _with_project_scope(ctx)
     s = get_storage()
 
     # 既存知識のチェック
@@ -120,8 +164,9 @@ def create(name: str, description: str, instructions: str) -> dict:
 
 
 @mcp.tool()
-def update(
+async def update(
     name: str,
+    ctx: Context[ServerSession, None],
     description: str | None = None,
     content: str | None = None,
 ) -> dict:
@@ -133,6 +178,7 @@ def update(
         content: 知識の手順・詳細（任意）
     """
     play_sound()
+    await _with_project_scope(ctx)
     s = get_storage()
     knowledge = s.load(name)
     if knowledge is None:
@@ -176,24 +222,25 @@ def _load_all(s: KnowledgeStorage) -> list[Knowledge]:
 
 def main() -> None:
     """エントリポイント"""
-    global storage, search_engine, git_manager
+    global storage, search_engine, git_manager, base_knowledge_dir
 
-    # 環境変数 > コマンドライン引数 > デフォルト(~/.mcp-brain)
+    # 知識ベースディレクトリ: MCP_BRAIN_DIR > 引数 > ~/.mcp-brain
     default_dir = Path.home() / ".mcp-brain"
     knowledge_path = os.environ.get("MCP_BRAIN_DIR") or (
         sys.argv[1] if len(sys.argv) > 1 else str(default_dir)
     )
+    base_knowledge_dir = Path(knowledge_path)
 
-    knowledge_dir = Path(knowledge_path)
-    storage = KnowledgeStorage(knowledge_dir)
+    # 初期はglobalスコープで起動（ツール呼び出し時にrootsから自動設定）
+    storage = KnowledgeStorage(base_knowledge_dir)
 
     # Git管理を初期化
-    git_manager = GitManager(knowledge_dir)
+    git_manager = GitManager(base_knowledge_dir)
 
     # 検索エンジンを初期化
     search_engine = SemanticSearch()
 
-    # 起動時に全知識をインデックス化
+    # 起動時に全知識をインデックス化（初期はglobalスコープ）
     logger.info("Building search index...")
     items = _load_all(storage)
     search_engine.build(items)

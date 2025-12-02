@@ -1,7 +1,14 @@
 """MCPサーバーのテスト"""
 
+from pathlib import Path
+
 from mcp_brain.models import Knowledge, KnowledgeSummary, KnowledgeUpdate
-from mcp_brain.storage import KnowledgeStorage
+from mcp_brain.storage import (
+    GLOBAL_SCOPE,
+    KnowledgeStorage,
+    get_scope_hierarchy,
+    path_to_scope,
+)
 
 
 class TestKnowledgeStorage:
@@ -41,12 +48,8 @@ class TestKnowledgeStorage:
         storage = KnowledgeStorage(tmp_path / "knowledge")
 
         storage.save(Knowledge(name="create-pr", description="PRを作成したいとき"))
-        storage.save(
-            Knowledge(name="review-pr", description="PRをレビューしたいとき")
-        )
-        storage.save(
-            Knowledge(name="run-tests", description="テストを実行したいとき")
-        )
+        storage.save(Knowledge(name="review-pr", description="PRをレビューしたいとき"))
+        storage.save(Knowledge(name="run-tests", description="テストを実行したいとき"))
 
         # 名前で検索
         results = storage.search("pr")
@@ -110,3 +113,113 @@ class TestModels:
         assert update.description == "新しい説明"
         assert update.content is None
         assert update.allowed_tools is None
+
+
+class TestScopeHierarchy:
+    """スコープ階層のテスト"""
+
+    def test_path_to_scope(self):
+        """パスをスコープ文字列に変換"""
+        assert path_to_scope(Path("/Users/me/project")) == "Users/me/project"
+        assert path_to_scope(Path("/a/b/c")) == "a/b/c"
+
+    def test_get_scope_hierarchy(self):
+        """スコープ階層の生成"""
+        hierarchy = get_scope_hierarchy(Path("/Users/me/pj/project"))
+        assert hierarchy[0] == "Users/me/pj/project"
+        assert hierarchy[1] == "Users/me/pj"
+        assert hierarchy[2] == "Users/me"
+        assert hierarchy[-1] == GLOBAL_SCOPE
+
+    def test_get_scope_hierarchy_none(self):
+        """プロジェクトなしの場合はglobalのみ"""
+        hierarchy = get_scope_hierarchy(None)
+        assert hierarchy == [GLOBAL_SCOPE]
+
+    def test_storage_scope_priority(self, tmp_path):
+        """スコープの優先度: プロジェクト固有 > 親 > global"""
+        base_dir = tmp_path / "brain"
+        project_path = Path("/Users/me/pj/project")
+
+        # 各スコープに同名の知識を作成
+        storage = KnowledgeStorage(base_dir)
+
+        # グローバルに保存
+        storage.save(
+            Knowledge(name="shared", description="global版"),
+            scope=GLOBAL_SCOPE,
+        )
+
+        # 親スコープに保存
+        storage.save(
+            Knowledge(name="shared", description="親スコープ版"),
+            scope="Users/me/pj",
+        )
+
+        # プロジェクトスコープに保存
+        storage.save(
+            Knowledge(name="shared", description="プロジェクト版"),
+            scope="Users/me/pj/project",
+        )
+
+        # プロジェクトスコープを設定
+        storage.set_project(project_path)
+
+        # 検索するとプロジェクト版が優先される
+        loaded = storage.load("shared")
+        assert loaded is not None
+        assert loaded.description == "プロジェクト版"
+
+    def test_storage_fallback_to_global(self, tmp_path):
+        """プロジェクトスコープに無ければglobalから取得"""
+        base_dir = tmp_path / "brain"
+        project_path = Path("/Users/me/pj/project")
+
+        storage = KnowledgeStorage(base_dir)
+
+        # グローバルにのみ保存
+        storage.save(
+            Knowledge(name="global-only", description="グローバル知識"),
+            scope=GLOBAL_SCOPE,
+        )
+
+        # プロジェクトスコープを設定
+        storage.set_project(project_path)
+
+        # グローバルから取得される
+        loaded = storage.load("global-only")
+        assert loaded is not None
+        assert loaded.description == "グローバル知識"
+
+    def test_list_all_merges_scopes(self, tmp_path):
+        """list_allは全スコープをマージ（重複除去）"""
+        base_dir = tmp_path / "brain"
+        project_path = Path("/Users/me/pj/project")
+
+        storage = KnowledgeStorage(base_dir, project_path)
+
+        # 各スコープに知識を作成
+        storage.save(
+            Knowledge(name="global-item", description="グローバル"),
+            scope=GLOBAL_SCOPE,
+        )
+        storage.save(
+            Knowledge(name="project-item", description="プロジェクト"),
+            scope="Users/me/pj/project",
+        )
+        storage.save(
+            Knowledge(name="shared", description="グローバル版"),
+            scope=GLOBAL_SCOPE,
+        )
+        storage.save(
+            Knowledge(name="shared", description="プロジェクト版"),
+            scope="Users/me/pj/project",
+        )
+
+        items = storage.list_all()
+        names = {k.name for k in items}
+        assert names == {"global-item", "project-item", "shared"}
+
+        # sharedはプロジェクト版が優先
+        shared_item = next(k for k in items if k.name == "shared")
+        assert shared_item.description == "プロジェクト版"
