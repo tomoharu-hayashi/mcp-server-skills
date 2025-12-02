@@ -1,13 +1,13 @@
-"""ハイブリッド検索のテスト"""
+"""セマンティック検索のテスト"""
 
 import pytest
 
 from mcp_skills.models import Skill
-from mcp_skills.search import HybridSearch
+from mcp_skills.search import SemanticSearch
 
 
-class TestHybridSearch:
-    """ハイブリッド検索のテスト"""
+class TestSemanticSearch:
+    """セマンティック検索のテスト"""
 
     @pytest.fixture
     def skills(self):
@@ -30,49 +30,44 @@ class TestHybridSearch:
             ),
         ]
 
-    def test_build_and_search(self, skills):
-        """インデックス構築と検索"""
-        search = HybridSearch()
-        search.build(skills)
-
-        results = search.search("PR")
-        assert len(results) >= 1
-        # PRに関連するスキルが上位に来る
-        names = [r.name for r in results]
-        assert "create-pr" in names or "review-pr" in names
-
-    def test_search_semantic(self, skills):
+    def test_semantic_search(self, skills):
         """セマンティック検索（意味的な類似性）"""
-        search = HybridSearch()
+        search = SemanticSearch()
         search.build(skills)
 
-        # 「本番公開」で検索 -> deploy関連がヒットすべき
+        # 「本番公開」でデプロイ関連が見つかる
         results = search.search("本番公開")
         assert len(results) >= 1
 
+    def test_search_pr(self, skills):
+        """PR関連の検索"""
+        search = SemanticSearch()
+        search.build(skills)
+
+        results = search.search("PRを作成したい")
+        assert len(results) >= 1
+        names = [r.name for r in results]
+        assert "create-pr" in names
+
     def test_add_skill(self, skills):
         """スキル追加後の検索"""
-        search = HybridSearch()
+        search = SemanticSearch()
         search.build(skills[:2])
 
-        # 最初は2件
         assert len(search.skills_map) == 2
 
-        # スキル追加
         search.add(skills[2])
         assert len(search.skills_map) == 3
 
-        # 追加したスキルが検索できる
-        results = search.search("deploy")
+        results = search.search("デプロイしたい")
         names = [r.name for r in results]
         assert "deploy-staging" in names
 
     def test_update_skill(self, skills):
         """スキル更新後の検索"""
-        search = HybridSearch()
+        search = SemanticSearch()
         search.build(skills)
 
-        # スキルを更新
         updated_skill = Skill(
             name="create-pr",
             description="マージリクエストを作成したいとき",
@@ -80,27 +75,32 @@ class TestHybridSearch:
         )
         search.update(updated_skill)
 
-        # 更新内容で検索できる
-        results = search.search("GitLab")
+        results = search.search("GitLabでマージリクエスト")
         assert len(results) >= 1
-        names = [r.name for r in results]
-        assert "create-pr" in names
+        # 更新されたスキルが上位に来ることを確認
+        assert results[0].name == "create-pr"
 
     def test_empty_build(self):
         """空のスキルリストでビルド"""
-        search = HybridSearch()
+        search = SemanticSearch()
         search.build([])
 
         results = search.search("anything")
         assert results == []
 
+    def test_empty_query(self, skills):
+        """空クエリの場合は空を返す"""
+        search = SemanticSearch()
+        search.build(skills)
+
+        results = search.search("")
+        assert results == []
+
     def test_rebuild(self, skills):
         """再インデックス"""
-        search = HybridSearch()
+        search = SemanticSearch()
         search.build(skills[:1])
         assert len(search.skills_map) == 1
 
         search.rebuild(skills)
         assert len(search.skills_map) == 3
-
-

@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager
 from .models import Skill, SkillSummary, SkillUpdate
-from .search import HybridSearch
+from .search import SemanticSearch
 from .storage import SkillStorage
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def play_sound() -> None:
 
 # グローバルインスタンス（mainで初期化）
 storage: SkillStorage | None = None
-search_engine: HybridSearch | None = None
+search_engine: SemanticSearch | None = None
 git_manager: GitManager | None = None
 
 mcp = FastMCP(
@@ -47,7 +47,7 @@ def get_storage() -> SkillStorage:
     return storage
 
 
-def get_search() -> HybridSearch:
+def get_search() -> SemanticSearch:
     """検索エンジンを取得"""
     if search_engine is None:
         raise RuntimeError("Search engine not initialized")
@@ -56,10 +56,10 @@ def get_search() -> HybridSearch:
 
 @mcp.tool()
 def search_skills(query: str) -> list[SkillSummary]:
-    """タスク開始前に関連スキルを検索。見つかったらget_skillで詳細を取得し手順に従う。
+    """タスク開始前に関連スキルを検索。見つかれば get_skill(name) で手順を取得し従う。
 
     Args:
-        query: タスクのキーワード（例: "PR", "deploy", "test"）
+        query: 自然言語クエリ（例: "PRを作成したい", "デプロイ手順を知りたい", "テストの書き方"）
     """
     play_sound()
     return get_search().search(query)
@@ -67,7 +67,7 @@ def search_skills(query: str) -> list[SkillSummary]:
 
 @mcp.tool()
 def get_skill(name: str) -> Skill | None:
-    """スキルの手順・注意点を取得。contentに従って作業を進める。
+    """スキルの詳細（手順・注意点）を取得。contentに従って作業を進める。
 
     Args:
         name: search_skillsで見つけたスキル名
@@ -78,7 +78,7 @@ def get_skill(name: str) -> Skill | None:
 
 @mcp.tool()
 def create_skill(name: str, description: str, instructions: str) -> Skill:
-    """新しいスキルを記録。タスク成功後、再利用できる手順を保存する。
+    """新しいスキルを作成。
 
     Args:
         name: kebab-case識別名（例: "deploy-staging"）
@@ -169,7 +169,7 @@ def main() -> None:
     git_manager = GitManager(skills_dir)
 
     # 検索エンジンを初期化
-    search_engine = HybridSearch()
+    search_engine = SemanticSearch()
 
     # 起動時に全スキルをインデックス化
     logger.info("Building search index...")
