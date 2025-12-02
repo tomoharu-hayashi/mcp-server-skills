@@ -9,7 +9,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager
-from .models import Skill, SkillSummary, SkillUpdate
+from .models import Skill
 from .search import SemanticSearch
 from .storage import SkillStorage
 
@@ -55,30 +55,39 @@ def get_search() -> SemanticSearch:
 
 
 @mcp.tool()
-def search_skills(query: str) -> list[SkillSummary]:
-    """タスク開始前に関連スキルを検索。見つかれば get_skill(name) で手順を取得し従う。
+def search_skills(query: str) -> list[dict]:
+    """タスク開始前に関連スキルを検索。見つかればget_skillで詳細を取得し手順に従う。
 
     Args:
-        query: 自然言語クエリ（例: "PRを作成したい", "デプロイ手順を知りたい", "テストの書き方"）
+        query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
     play_sound()
-    return get_search().search(query)
+    results = get_search().search(query)
+    return [{"name": r.name, "description": r.description} for r in results]
 
 
 @mcp.tool()
-def get_skill(name: str) -> Skill | None:
+def get_skill(name: str) -> dict:
     """スキルの詳細（手順・注意点）を取得。contentに従って作業を進める。
 
     Args:
         name: search_skillsで見つけたスキル名
     """
     play_sound()
-    return get_storage().load_skill(name)
+    skill = get_storage().load_skill(name)
+    if skill is None:
+        return {"error": f"Skill '{name}' not found"}
+    return {
+        "name": skill.name,
+        "description": skill.description,
+        "content": skill.content,
+        "version": skill.version,
+    }
 
 
 @mcp.tool()
-def create_skill(name: str, description: str, instructions: str) -> Skill:
-    """新しいスキルを作成。
+def create_skill(name: str, description: str, instructions: str) -> dict:
+    """新しいスキルを記録。タスク成功後、再利用できる手順を保存する。
 
     Args:
         name: kebab-case識別名（例: "deploy-staging"）
@@ -102,16 +111,26 @@ def create_skill(name: str, description: str, instructions: str) -> Skill:
     if git_manager:
         git_manager.commit_and_push(name, "create")
 
-    return skill
+    return {
+        "name": skill.name,
+        "description": skill.description,
+        "content": skill.content,
+        "version": skill.version,
+    }
 
 
 @mcp.tool()
-def update_skill(name: str, updates: SkillUpdate) -> Skill:
+def update_skill(
+    name: str,
+    description: str | None = None,
+    content: str | None = None,
+) -> dict:
     """スキルを改善。失敗から学んだ注意点や、より良い手順を追記する。
 
     Args:
         name: 更新するスキル名
-        updates: 変更内容（description, content等）
+        description: 説明・使用タイミング（任意）
+        content: スキルの手順・詳細（任意）
     """
     play_sound()
     s = get_storage()
@@ -120,12 +139,10 @@ def update_skill(name: str, updates: SkillUpdate) -> Skill:
         raise ValueError(f"Skill '{name}' not found")
 
     # 更新を適用
-    if updates.description is not None:
-        skill.description = updates.description
-    if updates.allowed_tools is not None:
-        skill.allowed_tools = updates.allowed_tools
-    if updates.content is not None:
-        skill.content = updates.content
+    if description is not None:
+        skill.description = description
+    if content is not None:
+        skill.content = content
 
     # バージョンを上げる
     skill.version += 1
@@ -139,7 +156,12 @@ def update_skill(name: str, updates: SkillUpdate) -> Skill:
     if git_manager:
         git_manager.commit_and_push(name, "update")
 
-    return skill
+    return {
+        "name": skill.name,
+        "description": skill.description,
+        "content": skill.content,
+        "version": skill.version,
+    }
 
 
 def _load_all_skills(s: SkillStorage) -> list[Skill]:
