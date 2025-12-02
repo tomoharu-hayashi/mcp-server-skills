@@ -12,6 +12,41 @@ def play_sosumi() -> None:
     )
 
 
+def show_create_confirmation(name: str, description: str) -> bool:
+    """知識作成の確認ダイアログを表示
+
+    Args:
+        name: 作成する知識名
+        description: 知識の説明
+
+    Returns:
+        True: 作成を承認 / False: キャンセル
+    """
+    # 効果音
+    play_sosumi()
+
+    # AppleScript でダイアログ表示
+    script = f'''
+    display dialog "以下の知識を作成しますか？\n\n名前: {name}\n説明: {description}" ¬
+        with title "MCP Brain: 知識の作成確認" ¬
+        buttons {{"キャンセル", "作成する"}} default button "作成する" ¬
+        with icon note
+    '''
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return "作成する" in result.stdout
+    except subprocess.TimeoutExpired:
+        return False
+    except Exception:
+        return False
+
+
 def show_stale_dialog(stale_names: list[str]) -> bool:
     """古い知識の警告ダイアログを表示
 

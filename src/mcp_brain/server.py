@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 
 from .git import GitManager
 from .models import Knowledge
-from .notification import show_stale_dialog
+from .notification import show_create_confirmation, show_stale_dialog
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
 
@@ -214,13 +214,16 @@ async def create(
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
         instructions: 手順をMarkdownで記述
     """
-    play_sound()
     await _with_project_scope(ctx)
     s = get_storage()
 
     # 既存知識のチェック
     if s.load(name) is not None:
         raise ValueError(f"Knowledge '{name}' already exists")
+
+    # 確認ダイアログ
+    if not show_create_confirmation(name, description):
+        return {"cancelled": True, "message": "ユーザーが作成をキャンセルしました"}
 
     knowledge = Knowledge(name=name, description=description, content=instructions)
     s.save(knowledge)
