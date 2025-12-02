@@ -1,5 +1,6 @@
 """FastMCPサーバー定義"""
 
+import logging
 import os
 import subprocess
 import sys
@@ -7,8 +8,12 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
+from .git import GitManager
 from .models import Skill, SkillSummary, SkillUpdate
+from .search import HybridSearch
 from .storage import SkillStorage
+
+logger = logging.getLogger(__name__)
 
 
 def play_sound() -> None:
@@ -20,8 +25,10 @@ def play_sound() -> None:
     )
 
 
-# グローバルなストレージインスタンス（mainで初期化）
+# グローバルインスタンス（mainで初期化）
 storage: SkillStorage | None = None
+search_engine: HybridSearch | None = None
+git_manager: GitManager | None = None
 
 mcp = FastMCP(
     "skills",
@@ -40,6 +47,13 @@ def get_storage() -> SkillStorage:
     return storage
 
 
+def get_search() -> HybridSearch:
+    """検索エンジンを取得"""
+    if search_engine is None:
+        raise RuntimeError("Search engine not initialized")
+    return search_engine
+
+
 @mcp.tool()
 def search_skills(query: str) -> list[SkillSummary]:
     """タスク開始前に関連スキルを検索。見つかったらget_skillで詳細を取得し手順に従う。
@@ -48,7 +62,7 @@ def search_skills(query: str) -> list[SkillSummary]:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
     play_sound()
-    return get_storage().search_skills(query)
+    return get_search().search(query)
 
 
 @mcp.tool()
@@ -80,6 +94,14 @@ def create_skill(name: str, description: str, instructions: str) -> Skill:
 
     skill = Skill(name=name, description=description, content=instructions)
     s.save_skill(skill)
+
+    # インデックスに追加
+    get_search().add(skill)
+
+    # Git commit + push
+    if git_manager:
+        git_manager.commit_and_push(name, "create")
+
     return skill
 
 
@@ -109,12 +131,30 @@ def update_skill(name: str, updates: SkillUpdate) -> Skill:
     skill.version += 1
 
     s.save_skill(skill)
+
+    # インデックスを更新
+    get_search().update(skill)
+
+    # Git commit + push
+    if git_manager:
+        git_manager.commit_and_push(name, "update")
+
     return skill
+
+
+def _load_all_skills(s: SkillStorage) -> list[Skill]:
+    """全スキルを読み込み"""
+    skills = []
+    for summary in s.list_skills():
+        skill = s.load_skill(summary.name)
+        if skill:
+            skills.append(skill)
+    return skills
 
 
 def main() -> None:
     """エントリポイント"""
-    global storage
+    global storage, search_engine, git_manager
 
     # 環境変数 > コマンドライン引数 > デフォルト(~/.mcp-skills)
     default_dir = Path.home() / ".mcp-skills"
@@ -122,7 +162,21 @@ def main() -> None:
         sys.argv[1] if len(sys.argv) > 1 else str(default_dir)
     )
 
-    storage = SkillStorage(Path(skills_path))
+    skills_dir = Path(skills_path)
+    storage = SkillStorage(skills_dir)
+
+    # Git管理を初期化
+    git_manager = GitManager(skills_dir)
+
+    # 検索エンジンを初期化
+    search_engine = HybridSearch()
+
+    # 起動時に全スキルをインデックス化
+    logger.info("Building search index...")
+    skills = _load_all_skills(storage)
+    search_engine.build(skills)
+    logger.info("Search index built with %d skills", len(skills))
+
     mcp.run()
 
 
