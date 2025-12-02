@@ -103,3 +103,4 @@ class TestHybridSearch:
         search.rebuild(skills)
         assert len(search.skills_map) == 3
 
+
