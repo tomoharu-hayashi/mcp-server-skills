@@ -15,6 +15,8 @@ from .notification import show_create_confirmation, show_stale_dialog
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
 
+# ロギング設定
+logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -306,7 +308,8 @@ def main() -> None:
     default_dir = Path.home() / ".mcp-brain"
     env_dir = os.environ.get("MCP_BRAIN_DIR", "").strip()
     knowledge_path = env_dir or (sys.argv[1] if len(sys.argv) > 1 else str(default_dir))
-    knowledge_dir = Path(knowledge_path)
+    knowledge_dir = Path(knowledge_path).expanduser().resolve()
+    logger.info("Knowledge directory: %s", knowledge_dir)
 
     # Git管理を初期化（必須: リモート接続を検証）
     try:
