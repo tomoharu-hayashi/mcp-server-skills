@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlparse
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 
-from .git import GitManager
+from .git import GitManager, GitNotAvailableError, GitOperationError
 from .models import Knowledge
 from .notification import show_create_confirmation, show_stale_dialog
 from .search import SemanticSearch
@@ -34,6 +34,14 @@ storage: KnowledgeStorage | None = None
 search_engine: SemanticSearch | None = None
 git_manager: GitManager | None = None
 base_knowledge_dir: Path | None = None
+
+
+def get_git() -> GitManager:
+    """Gitマネージャーを取得"""
+    if git_manager is None:
+        raise RuntimeError("Git manager not initialized")
+    return git_manager
+
 
 mcp = FastMCP(
     "brain",
@@ -164,15 +172,19 @@ async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> di
 
     Args:
         name: searchで見つけた知識名
-        hops: 連想する関連記憶の深さ（デフォルト: 2）
+        hops: 連想する関連記憶の深さ（デフォルト: 2、最大: 5）
     """
     play_sound()
     await _with_project_scope(ctx)
+
+    # hopsのバリデーション
+    hops = max(0, min(hops, 5))
+
     s = get_storage()
     search = get_search()
     knowledge = s.load(name)
     if knowledge is None:
-        return {"error": f"Knowledge '{name}' not found"}
+        raise ValueError(f"Knowledge '{name}' not found")
 
     # last_usedを更新（忘却システム用）
     knowledge.last_used = date.today()
@@ -225,15 +237,17 @@ async def create(
     if not show_create_confirmation(name, description):
         return {"cancelled": True, "message": "ユーザーが作成をキャンセルしました"}
 
+    # 知識の作成（バリデーションエラーはそのままraise）
     knowledge = Knowledge(name=name, description=description, content=instructions)
-    s.save(knowledge)
+
+    # 保存
+    saved_scope = s.save(knowledge)
 
     # インデックスに追加
     get_search().add(knowledge)
 
     # Git commit + push
-    if git_manager:
-        git_manager.commit_and_push(name, "create")
+    get_git().commit_and_push(name, "create", scope=saved_scope)
 
     return {
         "name": knowledge.name,
@@ -273,14 +287,14 @@ async def update(
     # バージョンを上げる
     knowledge.version += 1
 
-    s.save(knowledge)
+    # 保存
+    saved_scope = s.save(knowledge)
 
     # インデックスを更新
     get_search().update(knowledge)
 
     # Git commit + push
-    if git_manager:
-        git_manager.commit_and_push(name, "update")
+    get_git().commit_and_push(name, "update", scope=saved_scope)
 
     return {
         "name": knowledge.name,
@@ -304,17 +318,17 @@ async def forget(name: str, ctx: Context[ServerSession, None]) -> dict:
     # 存在確認
     knowledge = s.load(name)
     if knowledge is None:
-        return {"error": f"Knowledge '{name}' not found"}
+        raise ValueError(f"Knowledge '{name}' not found")
 
     # 検索インデックスから削除
     get_search().remove(name)
 
-    # ファイルを削除
-    s.delete(name)
+    # ファイルを削除（削除したスコープを取得）
+    deleted, knowledge_scope = s.delete(name)
 
     # Git commit + push
-    if git_manager:
-        git_manager.commit_and_push(name, "forget")
+    if deleted:
+        get_git().commit_and_push(name, "forget", scope=knowledge_scope)
 
     return {"deleted": name}
 
@@ -340,11 +354,16 @@ def main() -> None:
     )
     base_knowledge_dir = Path(knowledge_path)
 
+    # Git管理を初期化（必須: リモート接続を検証）
+    try:
+        git_manager = GitManager(base_knowledge_dir)
+        git_manager.verify_remote()
+    except GitNotAvailableError as e:
+        logger.error("Git integration required: %s", e)
+        sys.exit(1)
+
     # 初期はglobalスコープで起動（ツール呼び出し時にrootsから自動設定）
     storage = KnowledgeStorage(base_knowledge_dir)
-
-    # Git管理を初期化
-    git_manager = GitManager(base_knowledge_dir)
 
     # 検索エンジンを初期化（キャッシュディレクトリを指定）
     search_engine = SemanticSearch(cache_dir=base_knowledge_dir)
@@ -363,12 +382,15 @@ def main() -> None:
         logger.info("Found %d stale knowledge items", len(stale_names))
 
         if show_stale_dialog(stale_names):
-            # 削除を選択
+            # 削除を選択（バッチ処理なので1件の失敗で中断しない）
             for k in stale:
                 search_engine.remove(k.name)
-                storage.delete(k.name)
-                if git_manager:
-                    git_manager.commit_and_push(k.name, "forget")
+                deleted, scope = storage.delete(k.name)
+                if deleted:
+                    try:
+                        git_manager.commit_and_push(k.name, "forget", scope=scope)
+                    except GitOperationError:
+                        logger.exception("Failed to commit stale deletion: %s", k.name)
             logger.info("Deleted %d stale knowledge items", len(stale))
 
     mcp.run()

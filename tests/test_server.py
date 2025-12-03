@@ -67,8 +67,9 @@ class TestKnowledgeStorage:
         storage.save(Knowledge(name="to-delete", description="削除対象"))
         assert storage.load("to-delete") is not None
 
-        result = storage.delete("to-delete")
-        assert result is True
+        deleted, scope = storage.delete("to-delete")
+        assert deleted is True
+        assert scope == "global"
         assert storage.load("to-delete") is None
 
     def test_load_nonexistent(self, tmp_path):

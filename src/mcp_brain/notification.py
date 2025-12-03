@@ -3,6 +3,12 @@
 import subprocess
 
 
+def _escape_applescript(text: str) -> str:
+    """AppleScript文字列のエスケープ（インジェクション対策）"""
+    # バックスラッシュとダブルクォートをエスケープ
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def play_sosumi() -> None:
     """Sosumi効果音を再生"""
     subprocess.Popen(
@@ -25,9 +31,14 @@ def show_create_confirmation(name: str, description: str) -> bool:
     # 効果音
     play_sosumi()
 
+    # AppleScript用にエスケープ（インジェクション対策）
+    safe_name = _escape_applescript(name)
+    safe_desc = _escape_applescript(description)
+
     # AppleScript でダイアログ表示
     script = f"""
-    display dialog "以下の知識を作成しますか？\n\n名前: {name}\n説明: {description}" ¬
+    display dialog "以下の知識を作成しますか？\\n\\n\
+名前: {safe_name}\\n説明: {safe_desc}" ¬
         with title "MCP Brain: 知識の作成確認" ¬
         buttons {{"キャンセル", "作成する"}} default button "作成する" ¬
         with icon note
@@ -62,8 +73,10 @@ def show_stale_dialog(stale_names: list[str]) -> bool:
     # 効果音
     play_sosumi()
 
-    # 表示用リスト
-    names_display = "\\n".join(f"• {name}" for name in stale_names[:10])
+    # 表示用リスト（エスケープしてインジェクション対策）
+    names_display = "\\n".join(
+        f"• {_escape_applescript(name)}" for name in stale_names[:10]
+    )
     if len(stale_names) > 10:
         names_display += f"\\n...他 {len(stale_names) - 10} 件"
 

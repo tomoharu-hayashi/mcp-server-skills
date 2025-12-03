@@ -1,12 +1,15 @@
 """知識ファイルの読み書き"""
 
+import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import yaml
 
 from .models import Knowledge, KnowledgeSummary
+
+logger = logging.getLogger(__name__)
 
 # YAMLフロントマターのパターン
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
@@ -141,31 +144,50 @@ class KnowledgeStorage:
 
         return None
 
-    def save(self, knowledge: Knowledge, scope: str | None = None) -> None:
-        """知識を保存（デフォルトは現在のプロジェクトスコープ）"""
+    def save(self, knowledge: Knowledge, scope: str | None = None) -> str:
+        """知識を保存（デフォルトは現在のプロジェクトスコープ）
+
+        Returns:
+            保存先のスコープ
+
+        Raises:
+            OSError: ファイル書き込みに失敗した場合
+        """
+        actual_scope = scope or self.scope_hierarchy[0]
         if scope:
             path = self._knowledge_path(knowledge.name, scope=scope)
         else:
             path = self._knowledge_path(knowledge.name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        text = self._serialize_knowledge(knowledge)
-        path.write_text(text, encoding="utf-8")
 
-    def delete(self, name: str) -> bool:
-        """知識を削除"""
-        path = self._knowledge_path(name)
-        if path.exists():
-            path.unlink()
-            # 空ディレクトリも削除
-            if path.parent.exists() and not any(path.parent.iterdir()):
-                path.parent.rmdir()
-            return True
-        return False
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            text = self._serialize_knowledge(knowledge)
+            path.write_text(text, encoding="utf-8")
+        except OSError as e:
+            logger.error("Failed to save knowledge '%s': %s", knowledge.name, e)
+            raise
+
+        return actual_scope
+
+    def delete(self, name: str) -> tuple[bool, str | None]:
+        """知識を削除
+
+        Returns:
+            (成功フラグ, 削除したスコープ)
+        """
+        # スコープ階層を検索して削除
+        for scope in self.scope_hierarchy:
+            path = self._knowledge_path(name, scope=scope)
+            if path.exists():
+                path.unlink()
+                # 空ディレクトリも削除
+                if path.parent.exists() and not any(path.parent.iterdir()):
+                    path.parent.rmdir()
+                return True, scope
+        return False, None
 
     def get_stale(self, threshold_days: int = 30) -> list[Knowledge]:
         """古い知識を取得（最終使用日からthreshold_days以上経過）"""
-        from datetime import date, timedelta
-
         cutoff = date.today() - timedelta(days=threshold_days)
         stale = []
 
@@ -181,39 +203,47 @@ class KnowledgeStorage:
 
         return stale
 
-    def _parse_knowledge_file(self, name: str, text: str) -> Knowledge:
-        """KNOWLEDGE.mdファイルをパース"""
+    def _parse_knowledge_file(self, name: str, text: str) -> Knowledge | None:
+        """KNOWLEDGE.mdファイルをパース
+
+        Returns:
+            Knowledge または None（パース失敗時）
+        """
         frontmatter: dict = {}
         content = text
 
-        match = FRONTMATTER_PATTERN.match(text)
-        if match:
-            frontmatter = yaml.safe_load(match.group(1)) or {}
-            content = text[match.end() :]
+        try:
+            match = FRONTMATTER_PATTERN.match(text)
+            if match:
+                frontmatter = yaml.safe_load(match.group(1)) or {}
+                content = text[match.end() :]
 
-        # allowed-tools -> allowed_tools の変換
-        allowed_tools = frontmatter.get("allowed-tools") or frontmatter.get(
-            "allowed_tools"
-        )
+            # allowed-tools -> allowed_tools の変換
+            allowed_tools = frontmatter.get("allowed-tools") or frontmatter.get(
+                "allowed_tools"
+            )
 
-        # 日付の変換
-        created = frontmatter.get("created")
-        if isinstance(created, str):
-            created = date.fromisoformat(created)
+            # 日付の変換
+            created = frontmatter.get("created")
+            if isinstance(created, str):
+                created = date.fromisoformat(created)
 
-        last_used = frontmatter.get("last_used")
-        if isinstance(last_used, str):
-            last_used = date.fromisoformat(last_used)
+            last_used = frontmatter.get("last_used")
+            if isinstance(last_used, str):
+                last_used = date.fromisoformat(last_used)
 
-        return Knowledge(
-            name=frontmatter.get("name", name),
-            description=frontmatter.get("description", ""),
-            allowed_tools=allowed_tools,
-            version=frontmatter.get("version", 1),
-            created=created or date.today(),
-            last_used=last_used,
-            content=content.strip(),
-        )
+            return Knowledge(
+                name=frontmatter.get("name", name),
+                description=frontmatter.get("description", ""),
+                allowed_tools=allowed_tools,
+                version=frontmatter.get("version", 1),
+                created=created or date.today(),
+                last_used=last_used,
+                content=content.strip(),
+            )
+        except (yaml.YAMLError, ValueError) as e:
+            logger.warning("Failed to parse knowledge file '%s': %s", name, e)
+            return None
 
     def _serialize_knowledge(self, knowledge: Knowledge) -> str:
         """知識をKNOWLEDGE.md形式にシリアライズ"""
