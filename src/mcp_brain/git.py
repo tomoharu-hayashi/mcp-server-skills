@@ -37,71 +37,6 @@ class GitManager:
                 f"Knowledge directory is not a git repository: {self.knowledge_dir}"
             ) from e
 
-    def _ensure_clean_state(self) -> None:
-        """不正なGit状態を強制的に解除してクリーンな状態にする
-
-        以下の状態を検出・解除:
-        - rebase中 → abort
-        - merge中 → abort
-        - cherry-pick中 → abort
-        - 未コミットの変更 → 破棄
-
-        Raises:
-            GitOperationError: 状態のリセットに失敗した場合
-        """
-        git_dir = Path(self.repo.git_dir)
-
-        try:
-            # rebase中を検出・解除
-            if (git_dir / "rebase-merge").exists() or (
-                git_dir / "rebase-apply"
-            ).exists():
-                logger.warning("Detected rebase in progress, aborting...")
-                self.repo.git.rebase("--abort")
-
-            # merge中を検出・解除
-            if (git_dir / "MERGE_HEAD").exists():
-                logger.warning("Detected merge in progress, aborting...")
-                self.repo.git.merge("--abort")
-
-            # cherry-pick中を検出・解除
-            if (git_dir / "CHERRY_PICK_HEAD").exists():
-                logger.warning("Detected cherry-pick in progress, aborting...")
-                self.repo.git.cherry_pick("--abort")
-
-            # 未コミットの変更を破棄（ステージング含む）
-            if self.repo.is_dirty(untracked_files=True):
-                logger.warning("Detected uncommitted changes, discarding...")
-                self.repo.git.reset("--hard", "HEAD")
-                self.repo.git.clean("-fd")
-
-        except GitCommandError as e:
-            raise GitOperationError(
-                f"Failed to reset git state: {e}. "
-                "Please manually fix the repository state."
-            ) from e
-
-    def _sync_with_remote(self) -> None:
-        """リモートと同期（pull）
-
-        Raises:
-            GitOperationError: 同期に失敗した場合
-        """
-        try:
-            origin = self.repo.remote("origin")
-            origin.pull(rebase=True)
-            logger.info("Synced with remote")
-        except GitCommandError as e:
-            # pull失敗時は状態をリセットして再試行
-            logger.warning("Pull failed, resetting to remote state: %s", e)
-            try:
-                self.repo.git.fetch("origin")
-                self.repo.git.reset("--hard", "origin/HEAD")
-            except GitCommandError as reset_error:
-                raise GitOperationError(
-                    f"Failed to sync with remote: {reset_error}"
-                ) from reset_error
-
     def verify_remote(self) -> None:
         """リモート接続を検証（起動時チェック用）
 
@@ -126,6 +61,11 @@ class GitManager:
     def commit_and_push(self, name: str, action: str) -> None:
         """変更をcommit + push
 
+        手動変更への耐性:
+        1. 未コミットの変更があれば先にコミット（手動変更を保護）
+        2. 今回の変更をコミット
+        3. プッシュ時に競合があればrebaseで解決
+
         Args:
             name: 知識名
             action: 操作（create, update, forget）
@@ -134,23 +74,61 @@ class GitManager:
             GitOperationError: Git操作に失敗した場合
         """
         try:
-            # ファイルをステージング（まず変更を保護）
+            # 1. 不正なGit状態（rebase中など）があれば解除
+            self._abort_incomplete_operations()
+
+            # 2. 未コミットの手動変更があれば先にコミット（保護）
+            self._commit_manual_changes()
+
+            # 3. 今回の変更をステージング・コミット
             knowledge_path = Path(name) / "KNOWLEDGE.md"
             if action == "forget":
                 self.repo.index.remove([str(knowledge_path)], working_tree=True)
             else:
                 self.repo.index.add([str(knowledge_path)])
 
-            # コミット
             message = f"{action}: {name}"
             self.repo.index.commit(message)
             logger.info("Committed: %s", message)
 
-            # プッシュ（競合があればrebaseで解決）
+            # 4. プッシュ（競合時はrebaseで解決）
             self._push_with_rebase()
 
         except GitCommandError as e:
             raise GitOperationError(f"Git operation failed: {e}") from e
+
+    def _abort_incomplete_operations(self) -> None:
+        """不完全なGit操作を中止（rebase中、merge中など）"""
+        git_dir = Path(self.repo.git_dir)
+
+        try:
+            if (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists():
+                logger.warning("Aborting incomplete rebase...")
+                self.repo.git.rebase("--abort")
+
+            if (git_dir / "MERGE_HEAD").exists():
+                logger.warning("Aborting incomplete merge...")
+                self.repo.git.merge("--abort")
+
+            if (git_dir / "CHERRY_PICK_HEAD").exists():
+                logger.warning("Aborting incomplete cherry-pick...")
+                self.repo.git.cherry_pick("--abort")
+        except GitCommandError as e:
+            logger.warning("Failed to abort incomplete operation: %s", e)
+
+    def _commit_manual_changes(self) -> None:
+        """未コミットの手動変更をコミット（変更を保護）"""
+        if not self.repo.is_dirty(untracked_files=True):
+            return
+
+        try:
+            # 全ての変更をステージング
+            self.repo.git.add("-A")
+            # 手動変更としてコミット
+            self.repo.index.commit("manual: uncommitted changes")
+            logger.info("Committed manual changes")
+        except GitCommandError as e:
+            logger.warning("Failed to commit manual changes: %s", e)
 
     def _push_with_rebase(self) -> None:
         """プッシュ（競合時はrebaseで解決）"""
