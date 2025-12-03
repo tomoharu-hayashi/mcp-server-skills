@@ -44,9 +44,6 @@ class Knowledge(BaseModel):
     created: date = Field(default_factory=date.today, description="作成日")
     last_used: date | None = Field(default=None, description="最終使用日")
 
-    # スコープ情報（loadで設定される）
-    scope: str | None = Field(default=None, description="知識のスコープ")
-
     # Markdown本文
     content: str = Field(default="", description="知識の手順・詳細")
 

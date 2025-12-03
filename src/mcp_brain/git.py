@@ -123,13 +123,12 @@ class GitManager:
         except GitCommandError as e:
             raise GitNotAvailableError(f"Cannot connect to remote 'origin': {e}") from e
 
-    def commit_and_push(self, name: str, action: str, scope: str | None = None) -> None:
+    def commit_and_push(self, name: str, action: str) -> None:
         """変更をcommit + push
 
         Args:
             name: 知識名
             action: 操作（create, update, forget）
-            scope: スコープ（None の場合は global）
 
         Raises:
             GitOperationError: Git操作に失敗した場合
@@ -141,9 +140,8 @@ class GitManager:
         self._sync_with_remote()
 
         try:
-            # ファイルをステージング（knowledge_dir相対パス、スコープを含む）
-            scope_prefix = Path(scope) if scope else Path("global")
-            knowledge_path = scope_prefix / name / "KNOWLEDGE.md"
+            # ファイルをステージング
+            knowledge_path = Path(name) / "KNOWLEDGE.md"
             if action == "forget":
                 self.repo.index.remove([str(knowledge_path)], working_tree=True)
             else:

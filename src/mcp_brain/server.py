@@ -6,10 +6,8 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager, GitNotAvailableError, GitOperationError
 from .models import Knowledge
@@ -33,7 +31,6 @@ def play_sound() -> None:
 storage: KnowledgeStorage | None = None
 search_engine: SemanticSearch | None = None
 git_manager: GitManager | None = None
-base_knowledge_dir: Path | None = None
 
 
 def get_git() -> GitManager:
@@ -66,39 +63,6 @@ def get_search() -> SemanticSearch:
     if search_engine is None:
         raise RuntimeError("Search engine not initialized")
     return search_engine
-
-
-def _uri_to_path(uri: str) -> Path | None:
-    """file:// URIをPathに変換"""
-    parsed = urlparse(uri)
-    if parsed.scheme == "file":
-        return Path(unquote(parsed.path))
-    return None
-
-
-async def _get_project_path(ctx: Context[ServerSession, None]) -> Path | None:
-    """クライアントのrootsからプロジェクトパスを取得"""
-    try:
-        roots_result = await ctx.session.list_roots()
-        if roots_result.roots:
-            return _uri_to_path(str(roots_result.roots[0].uri))
-    except Exception as e:
-        logger.debug("Failed to get roots: %s", e)
-    return None
-
-
-async def _with_project_scope(ctx: Context[ServerSession, None]) -> None:
-    """プロジェクトスコープを設定"""
-    project_path = await _get_project_path(ctx)
-    s = get_storage()
-
-    # スコープが変わった場合のみ更新
-    if s.project_path != project_path:
-        s.set_project(project_path)
-        # インデックスを再構築（バックグラウンドで）
-        items = _load_all(s)
-        get_search().build(items, background=True)
-        logger.info("Project scope: %s", project_path or "global")
 
 
 def _expand_related(
@@ -154,20 +118,19 @@ def _expand_related(
 
 
 @mcp.tool()
-async def search(query: str, ctx: Context[ServerSession, None]) -> list[dict]:
+async def search(query: str) -> list[dict]:
     """過去の経験を想起。タスク開始前に「これ、前にやったことあるか？」と記憶を探る。
 
     Args:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
     """
     play_sound()
-    await _with_project_scope(ctx)
     results = get_search().search(query)
     return [{"name": r.name, "description": r.description} for r in results]
 
 
 @mcp.tool()
-async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> dict:
+async def get(name: str, hops: int = 2) -> dict:
     """記憶を思い出す。過去の経験の詳細を取得し、その通りに実行する。
 
     Args:
@@ -175,13 +138,12 @@ async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> di
         hops: 連想する関連記憶の深さ（デフォルト: 2、最大: 5）
     """
     play_sound()
-    await _with_project_scope(ctx)
 
     # hopsのバリデーション
     hops = max(0, min(hops, 5))
 
     s = get_storage()
-    search = get_search()
+    search_eng = get_search()
     knowledge = s.load(name)
     if knowledge is None:
         raise ValueError(f"Knowledge '{name}' not found")
@@ -191,7 +153,7 @@ async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> di
     s.save(knowledge)
 
     # Embeddingベースで類似知識を自動取得
-    similar = search.find_similar(name, top_k=5)
+    similar = search_eng.find_similar(name, top_k=5)
     similar_names = [summary.name for summary, _ in similar]
 
     # N ホップ先まで関連知識を展開
@@ -207,9 +169,7 @@ async def get(name: str, ctx: Context[ServerSession, None], hops: int = 2) -> di
 
 
 @mcp.tool()
-async def create(
-    name: str, description: str, instructions: str, ctx: Context[ServerSession, None]
-) -> dict:
+async def create(name: str, description: str, instructions: str) -> dict:
     """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
 
     ここでの「経験」を記録する。AIが元々知っている一般知識ではなく、
@@ -226,7 +186,6 @@ async def create(
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
         instructions: 手順をMarkdownで記述
     """
-    await _with_project_scope(ctx)
     s = get_storage()
 
     # 既存知識のチェック
@@ -241,13 +200,13 @@ async def create(
     knowledge = Knowledge(name=name, description=description, content=instructions)
 
     # 保存
-    saved_scope = s.save(knowledge)
+    s.save(knowledge)
 
     # インデックスに追加
     get_search().add(knowledge)
 
     # Git commit + push
-    get_git().commit_and_push(name, "create", scope=saved_scope)
+    get_git().commit_and_push(name, "create")
 
     return {
         "name": knowledge.name,
@@ -260,7 +219,6 @@ async def create(
 @mcp.tool()
 async def update(
     name: str,
-    ctx: Context[ServerSession, None],
     description: str | None = None,
     content: str | None = None,
 ) -> dict:
@@ -272,7 +230,6 @@ async def update(
         content: 知識の手順・詳細（任意）
     """
     play_sound()
-    await _with_project_scope(ctx)
     s = get_storage()
     knowledge = s.load(name)
     if knowledge is None:
@@ -288,13 +245,13 @@ async def update(
     knowledge.version += 1
 
     # 保存
-    saved_scope = s.save(knowledge)
+    s.save(knowledge)
 
     # インデックスを更新
     get_search().update(knowledge)
 
     # Git commit + push
-    get_git().commit_and_push(name, "update", scope=saved_scope)
+    get_git().commit_and_push(name, "update")
 
     return {
         "name": knowledge.name,
@@ -305,14 +262,13 @@ async def update(
 
 
 @mcp.tool()
-async def forget(name: str, ctx: Context[ServerSession, None]) -> dict:
+async def forget(name: str) -> dict:
     """記憶を忘却。間違った記憶や、もう必要ない経験を消去する。
 
     Args:
         name: 削除する知識名
     """
     play_sound()
-    await _with_project_scope(ctx)
     s = get_storage()
 
     # 存在確認
@@ -323,12 +279,11 @@ async def forget(name: str, ctx: Context[ServerSession, None]) -> dict:
     # 検索インデックスから削除
     get_search().remove(name)
 
-    # ファイルを削除（削除したスコープを取得）
-    deleted, knowledge_scope = s.delete(name)
+    # ファイルを削除
+    s.delete(name)
 
     # Git commit + push
-    if deleted:
-        get_git().commit_and_push(name, "forget", scope=knowledge_scope)
+    get_git().commit_and_push(name, "forget")
 
     return {"deleted": name}
 
@@ -345,34 +300,33 @@ def _load_all(s: KnowledgeStorage) -> list[Knowledge]:
 
 def main() -> None:
     """エントリポイント"""
-    global storage, search_engine, git_manager, base_knowledge_dir
+    global storage, search_engine, git_manager
 
     # 知識ベースディレクトリ: MCP_BRAIN_DIR > 引数 > ~/.mcp-brain
     default_dir = Path.home() / ".mcp-brain"
     env_dir = os.environ.get("MCP_BRAIN_DIR", "").strip()
     knowledge_path = env_dir or (sys.argv[1] if len(sys.argv) > 1 else str(default_dir))
-    base_knowledge_dir = Path(knowledge_path)
+    knowledge_dir = Path(knowledge_path)
 
     # Git管理を初期化（必須: リモート接続を検証）
     try:
-        git_manager = GitManager(base_knowledge_dir)
+        git_manager = GitManager(knowledge_dir)
         git_manager.verify_remote()
     except GitNotAvailableError as e:
         logger.error("Git integration required: %s", e)
         sys.exit(1)
 
-    # 初期はglobalスコープで起動（ツール呼び出し時にrootsから自動設定）
-    storage = KnowledgeStorage(base_knowledge_dir)
+    # ストレージを初期化
+    storage = KnowledgeStorage(knowledge_dir)
 
     # 検索エンジンを初期化（キャッシュディレクトリを指定）
-    search_engine = SemanticSearch(cache_dir=base_knowledge_dir)
+    search_engine = SemanticSearch(cache_dir=knowledge_dir)
 
-    # 起動時に全知識をインデックス化
-    # キャッシュが有効ならそれを使用、無効ならバックグラウンドでビルド
+    # 起動時に全知識をインデックス化（キャッシュがあれば即座に完了）
     logger.info("Initializing search index...")
     items = _load_all(storage)
-    search_engine.build(items, background=True)
-    logger.info("Search index initialization started (%d items)", len(items))
+    search_engine.build(items)
+    logger.info("Search index ready (%d items)", len(items))
 
     # 忘却チェック: 古い知識があればGUIで通知
     stale = storage.get_stale(threshold_days=30)
@@ -384,12 +338,11 @@ def main() -> None:
             # 削除を選択（バッチ処理なので1件の失敗で中断しない）
             for k in stale:
                 search_engine.remove(k.name)
-                deleted, scope = storage.delete(k.name)
-                if deleted:
-                    try:
-                        git_manager.commit_and_push(k.name, "forget", scope=scope)
-                    except GitOperationError:
-                        logger.exception("Failed to commit stale deletion: %s", k.name)
+                storage.delete(k.name)
+                try:
+                    git_manager.commit_and_push(k.name, "forget")
+                except GitOperationError:
+                    logger.exception("Failed to commit stale deletion: %s", k.name)
             logger.info("Deleted %d stale knowledge items", len(stale))
 
     mcp.run()

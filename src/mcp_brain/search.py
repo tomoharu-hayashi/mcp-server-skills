@@ -15,10 +15,10 @@ class SemanticSearch:
         self.embedding_index = EmbeddingIndex(model_name, cache_dir=cache_dir)
         self.knowledge_map: dict[str, Knowledge] = {}
 
-    def build(self, items: list[Knowledge], background: bool = False) -> None:
+    def build(self, items: list[Knowledge]) -> None:
         """インデックス構築（起動時）"""
         self.knowledge_map = {k.name: k for k in items}
-        self.embedding_index.build(items, background=background)
+        self.embedding_index.build(items)
 
     def rebuild(self, items: list[Knowledge], model_name: str | None = None) -> None:
         """再インデックス（モデル切り替え対応）"""

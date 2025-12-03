@@ -38,18 +38,15 @@ class IndexCache:
         self.cache_path = knowledge_dir / self.CACHE_FILE
         self.hash_path = knowledge_dir / self.HASH_FILE
 
-    def is_valid(self) -> bool:
-        """キャッシュが有効か（ハッシュが一致するか）"""
+    def load(self) -> dict[str, np.ndarray] | None:
+        """キャッシュからEmbeddingを読み込み（有効性チェック込み）"""
         if not self.cache_path.exists() or not self.hash_path.exists():
-            return False
+            return None
 
+        # ハッシュが一致するか確認
         stored_hash = self.hash_path.read_text(encoding="utf-8").strip()
         current_hash = compute_content_hash(self.knowledge_dir)
-        return stored_hash == current_hash
-
-    def load(self) -> dict[str, np.ndarray] | None:
-        """キャッシュからEmbeddingを読み込み"""
-        if not self.is_valid():
+        if stored_hash != current_hash:
             return None
 
         try:
@@ -59,13 +56,17 @@ class IndexCache:
             return None
 
     def save(self, embeddings: dict[str, np.ndarray]) -> None:
-        """Embeddingをキャッシュに保存"""
+        """Embeddingをキャッシュに保存（アトミック書き込み）"""
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
 
-        # ハッシュを保存
         current_hash = compute_content_hash(self.knowledge_dir)
-        self.hash_path.write_text(current_hash, encoding="utf-8")
 
-        # Embeddingを保存
-        with self.cache_path.open("wb") as f:
+        # 一時ファイルに書いてからrenameでアトミック化
+        tmp_cache = self.cache_path.with_suffix(".tmp")
+        with tmp_cache.open("wb") as f:
             pickle.dump(embeddings, f)
+        tmp_cache.rename(self.cache_path)
+
+        tmp_hash = self.hash_path.with_suffix(".tmp")
+        tmp_hash.write_text(current_hash, encoding="utf-8")
+        tmp_hash.rename(self.hash_path)

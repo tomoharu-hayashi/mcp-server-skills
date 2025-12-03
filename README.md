@@ -99,50 +99,6 @@ get(name="create-pr", hops=2)
 }
 ```
 
-## スコープとフィルタリング
-
-### スコープの階層構造
-
-知識は**プロジェクトスコープ**で管理され、階層的に検索されます。
-
-```
-/Users/you/
-├── pj/
-│   ├── work/
-│   │   └── api-server/     ← プロジェクトA
-│   └── personal/
-│       └── blog/           ← プロジェクトB
-└── .mcp-brain/
-    ├── global/                              ← 全プロジェクトから見える
-    ├── Users/you/pj/work/                   ← work以下のプロジェクトから見える
-    └── Users/you/pj/work/api-server/        ← api-serverのみから見える
-```
-
-### 優先度とフィルタリング
-
-プロジェクトAから知識を検索すると、以下の順で検索されます:
-
-1. `Users/you/pj/work/api-server/` (最優先)
-2. `Users/you/pj/work/`
-3. `Users/you/pj/`
-4. `Users/you/`
-5. `global` (最低優先度)
-
-**重要な特性**:
-
-- ✅ **同名の知識**: より具体的なスコープが優先される
-- ✅ **兄弟プロジェクトの除外**: プロジェクトBの知識は見えない
-- ✅ **親スコープの継承**: 親ディレクトリの知識は全て見える
-- ✅ **globalの共有**: globalの知識は全プロジェクトから見える
-
-### 使い分けの例
-
-| スコープ | 用途 | 例 |
-|---------|------|-----|
-| **プロジェクト固有** | そのプロジェクト専用の手順 | `deploy-api-server`: API固有のデプロイ手順 |
-| **親ディレクトリ** | 同じ組織/チーム共通の手順 | `code-review-process`: チームのレビュールール |
-| **global** | 全プロジェクト共通の汎用的な知識 | `git-rebase`: 一般的なGit操作 |
-
 ## Git連携
 
 ### 自動バージョン管理
@@ -181,6 +137,8 @@ uv tool install . --force
 
 ## 設定
 
+### 共通知識（全プロジェクトで共有）
+
 ```json
 {
   "mcpServers": {
@@ -188,9 +146,58 @@ uv tool install . --force
       "command": "uvx",
       "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
       "env": {
-        "MCP_BRAIN_DIR": "/path/to/knowledge"
+        "MCP_BRAIN_DIR": "~/.mcp-brain"
       }
     }
   }
 }
 ```
+
+### プロジェクト独立の知識
+
+プロジェクトごとに完全に独立した知識空間を持たせる場合。
+
+#### 1. プロジェクト内に知識ディレクトリを作成
+
+```bash
+cd /path/to/your-project
+mkdir .brain
+cd .brain
+git init
+git remote add origin git@github.com:your-name/your-project-brain.git
+```
+
+#### 2. MCP設定（プロジェクトごと）
+
+VS Code / Cursor の場合、`.vscode/mcp.json` を作成:
+
+```json
+{
+  "mcpServers": {
+    "brain": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
+      "env": {
+        "MCP_BRAIN_DIR": "${workspaceFolder}/.brain"
+      }
+    }
+  }
+}
+```
+
+#### 3. .gitignore に追加
+
+親リポジトリで `.brain/` が検知されないように:
+
+```gitignore
+.brain/
+```
+
+### 構成パターン
+
+| パターン | MCP_BRAIN_DIR | 用途 |
+|----------|---------------|------|
+| 共通 | `~/.mcp-brain` | 汎用ワークフロー（Git、PR作成など） |
+| プロジェクト独立 | `${workspaceFolder}/.brain` | プロジェクト固有の手順 |
+| チーム共有 | リポジトリ内 `.brain/` | チームで知識を共有 |
+

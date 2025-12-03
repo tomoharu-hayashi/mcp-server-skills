@@ -1,7 +1,6 @@
 """インデックスキャッシュのテスト"""
 
 import numpy as np
-import pytest
 
 from mcp_brain.index_cache import IndexCache, compute_content_hash
 
@@ -56,5 +55,5 @@ class TestIndexCache:
         knowledge_dir.mkdir()
         (knowledge_dir / "KNOWLEDGE.md").write_text("new content")
 
-        assert not cache.is_valid()
+        # load()がNoneを返す = キャッシュ無効
         assert cache.load() is None
