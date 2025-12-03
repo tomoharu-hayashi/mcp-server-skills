@@ -133,14 +133,8 @@ class GitManager:
         Raises:
             GitOperationError: Git操作に失敗した場合
         """
-        # 操作前に不正な状態をリセット
-        self._ensure_clean_state()
-
-        # リモートと同期
-        self._sync_with_remote()
-
         try:
-            # ファイルをステージング
+            # ファイルをステージング（まず変更を保護）
             knowledge_path = Path(name) / "KNOWLEDGE.md"
             if action == "forget":
                 self.repo.index.remove([str(knowledge_path)], working_tree=True)
@@ -152,14 +146,24 @@ class GitManager:
             self.repo.index.commit(message)
             logger.info("Committed: %s", message)
 
-            # プッシュ
-            self._push()
+            # プッシュ（競合があればrebaseで解決）
+            self._push_with_rebase()
 
         except GitCommandError as e:
             raise GitOperationError(f"Git operation failed: {e}") from e
 
-    def _push(self) -> None:
-        """リモートにプッシュ"""
+    def _push_with_rebase(self) -> None:
+        """プッシュ（競合時はrebaseで解決）"""
         origin = self.repo.remote("origin")
-        origin.push()
-        logger.info("Pushed to origin")
+        try:
+            origin.push()
+            logger.info("Pushed to origin")
+        except GitCommandError:
+            # プッシュ失敗 → pull --rebase してリトライ
+            logger.info("Push failed, trying pull --rebase...")
+            try:
+                origin.pull(rebase=True)
+                origin.push()
+                logger.info("Pushed after rebase")
+            except GitCommandError as e:
+                raise GitOperationError(f"Push failed after rebase: {e}") from e
