@@ -52,7 +52,9 @@ class KnowledgeStorage:
     """知識ファイルのストレージ"""
 
     def __init__(self, knowledge_dir: Path, project_path: Path | None = None) -> None:
-        self.base_dir = knowledge_dir
+        if not knowledge_dir or str(knowledge_dir) == "":
+            raise ValueError("knowledge_dir must not be empty")
+        self.base_dir = knowledge_dir.resolve()  # 絶対パスに変換
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.project_path = project_path
         self.scope_hierarchy = get_scope_hierarchy(project_path)
