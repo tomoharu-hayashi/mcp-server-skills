@@ -21,7 +21,9 @@ class KnowledgeStorage:
     def __init__(self, knowledge_dir: Path) -> None:
         if not knowledge_dir or str(knowledge_dir) == "":
             raise ValueError("knowledge_dir must not be empty")
-        self.knowledge_dir = knowledge_dir.resolve()
+        # 絶対パスに変換（resolve()で相対パスを解決）
+        self.knowledge_dir = Path(knowledge_dir).expanduser().resolve()
+        logger.info("KnowledgeStorage initialized: %s", self.knowledge_dir)
         self.knowledge_dir.mkdir(parents=True, exist_ok=True)
 
     def _knowledge_path(self, name: str) -> Path:
