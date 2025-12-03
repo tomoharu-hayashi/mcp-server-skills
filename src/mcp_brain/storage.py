@@ -134,7 +134,10 @@ class KnowledgeStorage:
             path = self._knowledge_path(name, scope=scope)
             if path.exists():
                 text = path.read_text(encoding="utf-8")
-                return self._parse_knowledge_file(name, text)
+                knowledge = self._parse_knowledge_file(name, text)
+                if knowledge:
+                    knowledge.scope = scope
+                return knowledge
             return None
 
         # スコープ階層を検索
@@ -142,12 +145,15 @@ class KnowledgeStorage:
             path = self._knowledge_path(name, scope=s)
             if path.exists():
                 text = path.read_text(encoding="utf-8")
-                return self._parse_knowledge_file(name, text)
+                knowledge = self._parse_knowledge_file(name, text)
+                if knowledge:
+                    knowledge.scope = s
+                return knowledge
 
         return None
 
     def save(self, knowledge: Knowledge, scope: str | None = None) -> str:
-        """知識を保存（デフォルトは現在のプロジェクトスコープ）
+        """知識を保存（デフォルトは知識の元スコープ、なければ現在のプロジェクトスコープ）
 
         Returns:
             保存先のスコープ
@@ -155,11 +161,9 @@ class KnowledgeStorage:
         Raises:
             OSError: ファイル書き込みに失敗した場合
         """
-        actual_scope = scope or self.scope_hierarchy[0]
-        if scope:
-            path = self._knowledge_path(knowledge.name, scope=scope)
-        else:
-            path = self._knowledge_path(knowledge.name)
+        # スコープの優先順位: 引数 > 知識の元スコープ > プロジェクトスコープ
+        actual_scope = scope or knowledge.scope or self.scope_hierarchy[0]
+        path = self._knowledge_path(knowledge.name, scope=actual_scope)
 
         try:
             path.parent.mkdir(parents=True, exist_ok=True)

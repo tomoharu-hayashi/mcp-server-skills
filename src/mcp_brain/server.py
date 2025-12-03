@@ -350,9 +350,7 @@ def main() -> None:
     # 知識ベースディレクトリ: MCP_BRAIN_DIR > 引数 > ~/.mcp-brain
     default_dir = Path.home() / ".mcp-brain"
     env_dir = os.environ.get("MCP_BRAIN_DIR", "").strip()
-    knowledge_path = env_dir or (
-        sys.argv[1] if len(sys.argv) > 1 else str(default_dir)
-    )
+    knowledge_path = env_dir or (sys.argv[1] if len(sys.argv) > 1 else str(default_dir))
     base_knowledge_dir = Path(knowledge_path)
 
     # Git管理を初期化（必須: リモート接続を検証）
