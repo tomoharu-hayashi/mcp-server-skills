@@ -102,7 +102,9 @@ class GitManager:
         git_dir = Path(self.repo.git_dir)
 
         try:
-            if (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists():
+            if (git_dir / "rebase-merge").exists() or (
+                git_dir / "rebase-apply"
+            ).exists():
                 logger.warning("Aborting incomplete rebase...")
                 self.repo.git.rebase("--abort")
 

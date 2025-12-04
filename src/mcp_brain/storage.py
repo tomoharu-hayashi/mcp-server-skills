@@ -70,7 +70,9 @@ class KnowledgeStorage:
             OSError: ファイル書き込みに失敗した場合
         """
         path = self._knowledge_path(knowledge.name)
-        logger.info("Saving knowledge to: %s (knowledge_dir=%s)", path, self.knowledge_dir)
+        logger.info(
+            "Saving knowledge to: %s (knowledge_dir=%s)", path, self.knowledge_dir
+        )
 
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +80,9 @@ class KnowledgeStorage:
             path.write_text(text, encoding="utf-8")
             logger.info("Knowledge saved successfully: %s", knowledge.name)
         except OSError as e:
-            logger.error("Failed to save knowledge '%s' to '%s': %s", knowledge.name, path, e)
+            logger.error(
+                "Failed to save knowledge '%s' to '%s': %s", knowledge.name, path, e
+            )
             raise
 
     def delete(self, name: str) -> bool:

@@ -171,7 +171,7 @@ async def get(name: str, hops: int = 2) -> dict:
 
 
 @mcp.tool()
-async def create(name: str, description: str, instructions: str) -> dict:
+async def create(name: str, description: str, instructions_markdown: str) -> dict:
     """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
 
     ここでの「経験」を記録する。AIが元々知っている一般知識ではなく、
@@ -186,7 +186,7 @@ async def create(name: str, description: str, instructions: str) -> dict:
     Args:
         name: kebab-case識別名（例: "deploy-staging"）
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
-        instructions: 手順をMarkdownで記述
+        instructions_markdown: 手順をMarkdownで記述
     """
     s = get_storage()
 
@@ -199,7 +199,9 @@ async def create(name: str, description: str, instructions: str) -> dict:
         return {"cancelled": True, "message": "ユーザーが作成をキャンセルしました"}
 
     # 知識の作成（バリデーションエラーはそのままraise）
-    knowledge = Knowledge(name=name, description=description, content=instructions)
+    knowledge = Knowledge(
+        name=name, description=description, content=instructions_markdown
+    )
 
     # 保存
     s.save(knowledge)
@@ -222,14 +224,14 @@ async def create(name: str, description: str, instructions: str) -> dict:
 async def update(
     name: str,
     description: str | None = None,
-    content: str | None = None,
+    content_markdown: str | None = None,
 ) -> dict:
     """記憶を強化。失敗から学んだ教訓や、より良いやり方で上書きする。
 
     Args:
         name: 更新する知識名
         description: 説明・使用タイミング（任意）
-        content: 知識の手順・詳細（任意）
+        content_markdown: 知識の手順・詳細（任意）
     """
     play_sound()
     s = get_storage()
@@ -240,8 +242,8 @@ async def update(
     # 更新を適用
     if description is not None:
         knowledge.description = description
-    if content is not None:
-        knowledge.content = content
+    if content_markdown is not None:
+        knowledge.content = content_markdown
 
     # バージョンを上げる
     knowledge.version += 1
