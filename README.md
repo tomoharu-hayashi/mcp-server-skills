@@ -146,7 +146,7 @@ uv tool install . --force
       "command": "uvx",
       "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
       "env": {
-        "MCP_BRAIN_DIR": "~/.mcp-brain"
+        "MCP_BRAIN_DIR": "~/pj/my/mcp-brain-storage"
       }
     }
   }
@@ -197,6 +197,6 @@ VS Code / Cursor の場合、`.vscode/mcp.json` を作成:
 
 | パターン | MCP_BRAIN_DIR | 用途 |
 |----------|---------------|------|
-| 共通 | `~/.mcp-brain` | 汎用ワークフロー（Git、PR作成など） |
+| 共通 | `~/pj/my/mcp-brain-storage` | 汎用ワークフロー（Git、PR作成など） |
 | プロジェクト独立 | `${workspaceFolder}/.brain` | プロジェクト固有の手順 |
 | チーム共有 | リポジトリ内 `.brain/` | チームで知識を共有 |

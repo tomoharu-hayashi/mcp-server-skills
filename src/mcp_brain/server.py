@@ -306,8 +306,8 @@ def main() -> None:
     """エントリポイント"""
     global storage, search_engine, git_manager
 
-    # 知識ベースディレクトリ: MCP_BRAIN_DIR > 引数 > ~/.mcp-brain
-    default_dir = Path.home() / ".mcp-brain"
+    # 知識ベースディレクトリ: MCP_BRAIN_DIR > 引数 > ~/pj/my/mcp-brain-storage
+    default_dir = Path.home() / "pj" / "my" / "mcp-brain-storage"
     env_dir = os.environ.get("MCP_BRAIN_DIR", "").strip()
     knowledge_path = env_dir or (sys.argv[1] if len(sys.argv) > 1 else str(default_dir))
     knowledge_dir = Path(knowledge_path).expanduser().resolve()
