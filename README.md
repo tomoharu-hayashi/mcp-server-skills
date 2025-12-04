@@ -37,9 +37,13 @@ AIエージェントに「統合的な知識」を提供するMCPサーバー
 ## 知識の構造
 
 ```
-knowledge/
-└── {knowledge-name}/
-    └── KNOWLEDGE.md
+mcp-brain-storage/          # Gitリポジトリ
+├── .index_cache.pkl        # キャッシュ
+├── .index_hash
+├── README.md
+└── knowledge/              # 知識ファイルはここに配置
+    └── {knowledge-name}/
+        └── KNOWLEDGE.md
 ```
 
 ```yaml

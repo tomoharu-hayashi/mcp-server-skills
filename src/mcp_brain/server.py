@@ -196,7 +196,7 @@ async def create(name: str, description: str, instructions_markdown: str) -> dic
 
     # 確認ダイアログ
     if not show_create_confirmation(name, description):
-        return {"cancelled": True, "message": "ユーザーが作成をキャンセルしました"}
+        raise ValueError("ユーザーが作成をキャンセルしました")
 
     # 知識の作成（バリデーションエラーはそのままraise）
     knowledge = Knowledge(
@@ -310,22 +310,24 @@ def main() -> None:
     default_dir = Path.home() / "pj" / "my" / "mcp-brain-storage"
     env_dir = os.environ.get("MCP_BRAIN_DIR", "").strip()
     knowledge_path = env_dir or (sys.argv[1] if len(sys.argv) > 1 else str(default_dir))
-    knowledge_dir = Path(knowledge_path).expanduser().resolve()
-    logger.info("Knowledge directory: %s", knowledge_dir)
+    repo_dir = Path(knowledge_path).expanduser().resolve()
+    storage_dir = repo_dir / "knowledge"  # 知識ファイルはknowledge/以下に配置
+    logger.info("Repository directory: %s", repo_dir)
+    logger.info("Storage directory: %s", storage_dir)
 
     # Git管理を初期化（必須: リモート接続を検証）
     try:
-        git_manager = GitManager(knowledge_dir)
+        git_manager = GitManager(repo_dir)
         git_manager.verify_remote()
     except GitNotAvailableError as e:
         logger.error("Git integration required: %s", e)
         sys.exit(1)
 
-    # ストレージを初期化
-    storage = KnowledgeStorage(knowledge_dir)
+    # ストレージを初期化（knowledge/以下）
+    storage = KnowledgeStorage(storage_dir)
 
-    # 検索エンジンを初期化（キャッシュディレクトリを指定）
-    search_engine = SemanticSearch(cache_dir=knowledge_dir)
+    # 検索エンジンを初期化（キャッシュはリポジトリrootに配置）
+    search_engine = SemanticSearch(cache_dir=repo_dir)
 
     # 起動時に全知識をインデックス化（キャッシュがあれば即座に完了）
     logger.info("Initializing search index...")

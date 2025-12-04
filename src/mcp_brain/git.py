@@ -81,7 +81,8 @@ class GitManager:
             self._commit_manual_changes()
 
             # 3. 今回の変更をステージング・コミット
-            knowledge_path = Path(name) / "KNOWLEDGE.md"
+            # 知識ファイルはknowledge/以下に配置
+            knowledge_path = Path("knowledge") / name / "KNOWLEDGE.md"
             if action == "forget":
                 self.repo.index.remove([str(knowledge_path)], working_tree=True)
             else:
