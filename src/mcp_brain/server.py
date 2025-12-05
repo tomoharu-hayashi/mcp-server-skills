@@ -10,7 +10,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager, GitNotAvailableError, GitOperationError
-from .models import Knowledge
+from .models import Knowledge, validate_project_name
 from .notification import show_create_confirmation, show_stale_dialog
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
@@ -120,15 +120,33 @@ def _expand_related(
 
 
 @mcp.tool()
-async def search(query: str) -> list[dict]:
+async def search(query: str, project: str = "global") -> list[dict]:
     """過去の経験を想起。タスク開始前に「これ、前にやったことあるか？」と記憶を探る。
 
     Args:
         query: タスクのキーワード（例: "PR", "deploy", "test"）
+        project: リポジトリ名（kebab-case）または "global"。
+                 プロジェクト固有の知識はそのリポジトリ名、
+                 汎用的な知識は "global" を指定。
     """
     play_sound()
+
+    # バリデーション
+    validate_project_name(project)
+
     results = get_search().search(query)
-    return [{"name": r.name, "description": r.description} for r in results]
+
+    # project指定時は3グループに分割してソート
+    if project != "global":
+        matched = [r for r in results if r.project == project]
+        global_ = [r for r in results if r.project == "global"]
+        others = [r for r in results if r.project not in (project, "global")]
+        results = matched + global_ + others
+
+    return [
+        {"name": r.name, "description": r.description, "project": r.project}
+        for r in results
+    ]
 
 
 @mcp.tool()
@@ -164,6 +182,7 @@ async def get(name: str, hops: int = 2) -> dict:
     return {
         "name": knowledge.name,
         "description": knowledge.description,
+        "project": knowledge.project,
         "content": knowledge.content,
         "version": knowledge.version,
         "related": related_summaries,
@@ -171,7 +190,9 @@ async def get(name: str, hops: int = 2) -> dict:
 
 
 @mcp.tool()
-async def create(name: str, description: str, instructions_markdown: str) -> dict:
+async def create(
+    name: str, description: str, instructions_markdown: str, project: str = "global"
+) -> dict:
     """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
 
     ここでの「経験」を記録する。AIが元々知っている一般知識ではなく、
@@ -187,6 +208,9 @@ async def create(name: str, description: str, instructions_markdown: str) -> dic
         name: kebab-case識別名（例: "deploy-staging"）
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
         instructions_markdown: 手順をMarkdownで記述
+        project: リポジトリ名（kebab-case）または "global"。
+                 プロジェクト固有の知識はそのリポジトリ名、
+                 汎用的な知識は "global" を指定。
     """
     s = get_storage()
 
@@ -200,7 +224,10 @@ async def create(name: str, description: str, instructions_markdown: str) -> dic
 
     # 知識の作成（バリデーションエラーはそのままraise）
     knowledge = Knowledge(
-        name=name, description=description, content=instructions_markdown
+        name=name,
+        description=description,
+        content=instructions_markdown,
+        project=project,
     )
 
     # 保存
@@ -215,6 +242,7 @@ async def create(name: str, description: str, instructions_markdown: str) -> dic
     return {
         "name": knowledge.name,
         "description": knowledge.description,
+        "project": knowledge.project,
         "content": knowledge.content,
         "version": knowledge.version,
     }
@@ -225,6 +253,7 @@ async def update(
     name: str,
     description: str | None = None,
     content_markdown: str | None = None,
+    project: str | None = None,
 ) -> dict:
     """記憶を強化。失敗から学んだ教訓や、より良いやり方で上書きする。
 
@@ -232,6 +261,7 @@ async def update(
         name: 更新する知識名
         description: 説明・使用タイミング（任意）
         content_markdown: 知識の手順・詳細（任意）
+        project: リポジトリ名（kebab-case）または "global"（任意）
     """
     play_sound()
     s = get_storage()
@@ -244,6 +274,8 @@ async def update(
         knowledge.description = description
     if content_markdown is not None:
         knowledge.content = content_markdown
+    if project is not None:
+        knowledge.project = validate_project_name(project)
 
     # バージョンを上げる
     knowledge.version += 1
@@ -260,6 +292,7 @@ async def update(
     return {
         "name": knowledge.name,
         "description": knowledge.description,
+        "project": knowledge.project,
         "content": knowledge.content,
         "version": knowledge.version,
     }

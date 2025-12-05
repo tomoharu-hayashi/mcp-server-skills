@@ -99,3 +99,140 @@ class TestModels:
         assert isinstance(summary, KnowledgeSummary)
         assert summary.name == "test"
         assert summary.description == "テスト"
+
+    def test_knowledge_to_summary_with_project(self):
+        """Knowledgeから概要への変換（project付き）"""
+        knowledge = Knowledge(
+            name="test-with-project",
+            description="プロジェクト付きテスト",
+            content="詳細",
+            project="my-app",
+        )
+        summary = knowledge.to_summary()
+        assert summary.project == "my-app"
+
+    def test_knowledge_default_project(self):
+        """Knowledgeのデフォルトproject"""
+        knowledge = Knowledge(
+            name="test-default",
+            description="デフォルトテスト",
+        )
+        assert knowledge.project == "global"
+        assert knowledge.to_summary().project == "global"
+
+
+class TestProjectValidation:
+    """プロジェクト名バリデーションのテスト"""
+
+    def test_valid_project_names(self):
+        """有効なプロジェクト名"""
+        valid_names = ["my-app", "project123", "mcp-server-brain", "global"]
+        for name in valid_names:
+            knowledge = Knowledge(
+                name="test",
+                description="test",
+                project=name,
+            )
+            assert knowledge.project == name
+
+    def test_invalid_project_uppercase(self):
+        """大文字は無効"""
+        import pytest
+
+        with pytest.raises(ValueError, match="must be kebab-case"):
+            Knowledge(name="test", description="test", project="MyApp")
+
+    def test_invalid_project_underscore(self):
+        """アンダースコアは無効"""
+        import pytest
+
+        with pytest.raises(ValueError, match="must be kebab-case"):
+            Knowledge(name="test", description="test", project="my_app")
+
+    def test_invalid_project_empty(self):
+        """空文字は無効"""
+        import pytest
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Knowledge(name="test", description="test", project="")
+
+    def test_invalid_project_space(self):
+        """スペースは無効"""
+        import pytest
+
+        with pytest.raises(ValueError, match="must be kebab-case"):
+            Knowledge(name="test", description="test", project="my app")
+
+
+class TestProjectSorting:
+    """プロジェクトソートのテスト"""
+
+    def test_project_sorting_logic(self):
+        """プロジェクト一致 → global → その他の順でソートされる"""
+        # KnowledgeSummaryのリストを作成
+        results = [
+            KnowledgeSummary(name="k1", description="other", project="other-project"),
+            KnowledgeSummary(name="k2", description="global", project="global"),
+            KnowledgeSummary(name="k3", description="matched", project="my-app"),
+            KnowledgeSummary(name="k4", description="global2", project="global"),
+            KnowledgeSummary(name="k5", description="matched2", project="my-app"),
+        ]
+
+        project = "my-app"
+
+        # ソートロジック（server.py と同じ）
+        matched = [r for r in results if r.project == project]
+        global_ = [r for r in results if r.project == "global"]
+        others = [r for r in results if r.project not in (project, "global")]
+        sorted_results = matched + global_ + others
+
+        # 検証: my-app が先、次に global、最後に other
+        assert sorted_results[0].name == "k3"
+        assert sorted_results[1].name == "k5"
+        assert sorted_results[2].name == "k2"
+        assert sorted_results[3].name == "k4"
+        assert sorted_results[4].name == "k1"
+
+
+class TestProjectStorage:
+    """プロジェクトフィールドのストレージテスト"""
+
+    def test_save_and_load_with_project(self, tmp_path):
+        """projectフィールド付き知識の保存と読み込み"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+
+        knowledge = Knowledge(
+            name="project-knowledge",
+            description="プロジェクト付き知識",
+            project="my-awesome-app",
+        )
+        storage.save(knowledge)
+
+        loaded = storage.load("project-knowledge")
+        assert loaded is not None
+        assert loaded.project == "my-awesome-app"
+
+    def test_load_without_project_defaults_to_global(self, tmp_path):
+        """projectフィールドがない既存知識はglobalになる"""
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+
+        # projectフィールドなしのKNOWLEDGE.mdを直接作成
+        knowledge_dir = tmp_path / "knowledge" / "old-knowledge"
+        knowledge_dir.mkdir(parents=True)
+        (knowledge_dir / "KNOWLEDGE.md").write_text(
+            """---
+name: old-knowledge
+description: 古い知識
+version: 1
+created: 2025-01-01
+---
+
+## 手順
+古い手順
+""",
+            encoding="utf-8",
+        )
+
+        loaded = storage.load("old-knowledge")
+        assert loaded is not None
+        assert loaded.project == "global"

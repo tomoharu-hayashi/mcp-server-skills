@@ -150,6 +150,7 @@ class KnowledgeStorage:
             return Knowledge(
                 name=frontmatter.get("name", name),
                 description=frontmatter.get("description", ""),
+                project=frontmatter.get("project", "global"),
                 allowed_tools=allowed_tools,
                 version=frontmatter.get("version", 1),
                 created=created or date.today(),
@@ -165,6 +166,7 @@ class KnowledgeStorage:
         frontmatter: dict = {
             "name": knowledge.name,
             "description": knowledge.description,
+            "project": knowledge.project,
         }
 
         # オプションフィールド

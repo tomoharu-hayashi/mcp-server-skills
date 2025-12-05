@@ -8,12 +8,39 @@ from pydantic import BaseModel, Field, field_validator
 # 知識名の正規表現: kebab-case（英数字とハイフンのみ）
 KNOWLEDGE_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
+# プロジェクト名の正規表現: kebab-case または "global"
+PROJECT_NAME_PATTERN = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*|global)$")
+
+
+def validate_project_name(v: str) -> str:
+    """プロジェクト名のバリデーション（kebab-case または 'global'）
+
+    Args:
+        v: プロジェクト名
+
+    Returns:
+        バリデーション済みのプロジェクト名
+
+    Raises:
+        ValueError: 無効なプロジェクト名の場合
+    """
+    if not v:
+        raise ValueError("project cannot be empty")
+    if not PROJECT_NAME_PATTERN.match(v):
+        raise ValueError(
+            f"Invalid project '{v}': must be kebab-case (e.g., 'my-app') or 'global'"
+        )
+    if len(v) > 100:
+        raise ValueError("project is too long (max 100 characters)")
+    return v
+
 
 class KnowledgeSummary(BaseModel):
     """知識の概要（検索結果用）"""
 
     name: str = Field(description="知識識別名")
     description: str = Field(description="説明・使用タイミング")
+    project: str = Field(default="global", description="所属プロジェクト")
 
 
 class Knowledge(BaseModel):
@@ -36,6 +63,15 @@ class Knowledge(BaseModel):
             raise ValueError("name is too long (max 100 characters)")
         return v
 
+    # プロジェクト分類
+    project: str = Field(default="global", description="所属プロジェクト")
+
+    @field_validator("project")
+    @classmethod
+    def validate_project(cls, v: str) -> str:
+        """プロジェクト名のバリデーション"""
+        return validate_project_name(v)
+
     # オプション
     allowed_tools: str | None = Field(default=None, description="ツール制限")
 
@@ -49,4 +85,6 @@ class Knowledge(BaseModel):
 
     def to_summary(self) -> KnowledgeSummary:
         """概要に変換"""
-        return KnowledgeSummary(name=self.name, description=self.description)
+        return KnowledgeSummary(
+            name=self.name, description=self.description, project=self.project
+        )
