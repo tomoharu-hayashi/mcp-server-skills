@@ -216,10 +216,8 @@ class TestProjectStorage:
         """projectフィールドがない既存知識はglobalになる"""
         storage = KnowledgeStorage(tmp_path / "knowledge")
 
-        # projectフィールドなしのKNOWLEDGE.mdを直接作成
-        knowledge_dir = tmp_path / "knowledge" / "old-knowledge"
-        knowledge_dir.mkdir(parents=True)
-        (knowledge_dir / "KNOWLEDGE.md").write_text(
+        # projectフィールドなしの.mdファイルを直接作成（フラット形式）
+        (tmp_path / "knowledge" / "old-knowledge.md").write_text(
             """---
 name: old-knowledge
 description: 古い知識

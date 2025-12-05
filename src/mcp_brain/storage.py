@@ -28,18 +28,17 @@ class KnowledgeStorage:
 
     def _knowledge_path(self, name: str) -> Path:
         """知識ファイルのパスを取得"""
-        return self.knowledge_dir / name / "KNOWLEDGE.md"
+        return self.knowledge_dir / f"{name}.md"
 
     def list_all(self) -> list[KnowledgeSummary]:
         """全知識を取得"""
         items = []
-        for item_dir in self.knowledge_dir.iterdir():
-            if item_dir.is_dir():
-                knowledge_file = item_dir / "KNOWLEDGE.md"
-                if knowledge_file.exists():
-                    knowledge = self.load(item_dir.name)
-                    if knowledge:
-                        items.append(knowledge.to_summary())
+        for item_file in self.knowledge_dir.iterdir():
+            if item_file.is_file() and item_file.suffix == ".md":
+                name = item_file.stem
+                knowledge = self.load(name)
+                if knowledge:
+                    items.append(knowledge.to_summary())
         return items
 
     def search(self, query: str) -> list[KnowledgeSummary]:
@@ -75,7 +74,6 @@ class KnowledgeStorage:
         )
 
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
             text = self._serialize_knowledge(knowledge)
             path.write_text(text, encoding="utf-8")
             logger.info("Knowledge saved successfully: %s", knowledge.name)
@@ -96,9 +94,6 @@ class KnowledgeStorage:
             return False
 
         path.unlink()
-        # 空ディレクトリも削除
-        if path.parent.exists() and not any(path.parent.iterdir()):
-            path.parent.rmdir()
         return True
 
     def get_stale(self, threshold_days: int = 30) -> list[Knowledge]:

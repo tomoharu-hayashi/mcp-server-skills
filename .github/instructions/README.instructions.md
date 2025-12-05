@@ -20,6 +20,16 @@ AIエージェントに「統合的な知識」を提供するMCPサーバー
 
 このサーバーは、AIエージェントに同様の学習サイクルを提供する。
 
+## Obsidian互換
+
+知識の保存形式は [Obsidian](https://obsidian.md/) にインスパイアされています。
+
+- **フラットなMarkdownファイル**: `{name}.md` 形式で保存
+- **YAMLフロントマター**: Obsidianのプロパティと互換
+- **Embeddingベースの関連付け**: Obsidianのバックリンクに相当する自動連想
+
+`knowledge/` フォルダをObsidianのVaultとして開けば、知識を直接閲覧・編集できます。
+
 ## 機能
 
 ### 知識の参照
@@ -41,13 +51,14 @@ AIエージェントに「統合的な知識」を提供するMCPサーバー
 ## 知識の構造
 
 ```
-mcp-brain-storage/          # Gitリポジトリ
+mcp-brain-storage/          # Gitリポジトリ（Obsidianで開ける）
 ├── .index_cache.pkl        # キャッシュ
 ├── .index_hash
 ├── README.md
 └── knowledge/              # 知識ファイルはここに配置
-    └── {knowledge-name}/
-        └── KNOWLEDGE.md
+    ├── create-pr.md        # フラット形式（Obsidian互換）
+    ├── deploy-staging.md
+    └── git-commit.md
 ```
 
 ```yaml
