@@ -5,6 +5,7 @@
 - 可読性・見やすさを重視（命名の一貫性、適切な構造）
 - 必要箇所のみ日本語コメント
 
+
 # MCP Brain Server
 
 AIエージェントに「統合的な知識」を提供するMCPサーバー
@@ -44,9 +45,13 @@ AIエージェントに「統合的な知識」を提供するMCPサーバー
 ## 知識の構造
 
 ```
-knowledge/
-└── {knowledge-name}/
-    └── KNOWLEDGE.md
+mcp-brain-storage/          # Gitリポジトリ
+├── .index_cache.pkl        # キャッシュ
+├── .index_hash
+├── README.md
+└── knowledge/              # 知識ファイルはここに配置
+    └── {knowledge-name}/
+        └── KNOWLEDGE.md
 ```
 
 ```yaml
@@ -144,6 +149,8 @@ uv tool install . --force
 
 ## 設定
 
+### 共通知識（全プロジェクトで共有）
+
 ```json
 {
   "mcpServers": {
@@ -151,12 +158,60 @@ uv tool install . --force
       "command": "uvx",
       "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
       "env": {
-        "MCP_BRAIN_DIR": "/path/to/knowledge"
+        "MCP_BRAIN_DIR": "~/pj/my/mcp-brain-storage"
       }
     }
   }
 }
 ```
+
+### プロジェクト独立の知識
+
+プロジェクトごとに完全に独立した知識空間を持たせる場合。
+
+#### 1. プロジェクト内に知識ディレクトリを作成
+
+```bash
+cd /path/to/your-project
+mkdir .brain
+cd .brain
+git init
+git remote add origin git@github.com:your-name/your-project-brain.git
+```
+
+#### 2. MCP設定（プロジェクトごと）
+
+VS Code / Cursor の場合、`.vscode/mcp.json` を作成:
+
+```json
+{
+  "mcpServers": {
+    "brain": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/tomoharu-hayashi/mcp-server-brain.git", "mcp-brain"],
+      "env": {
+        "MCP_BRAIN_DIR": "${workspaceFolder}/.brain"
+      }
+    }
+  }
+}
+```
+
+#### 3. .gitignore に追加
+
+親リポジトリで `.brain/` が検知されないように:
+
+```gitignore
+.brain/
+```
+
+### 構成パターン
+
+| パターン | MCP_BRAIN_DIR | 用途 |
+|----------|---------------|------|
+| 共通 | `~/pj/my/mcp-brain-storage` | 汎用ワークフロー（Git、PR作成など） |
+| プロジェクト独立 | `${workspaceFolder}/.brain` | プロジェクト固有の手順 |
+| チーム共有 | リポジトリ内 `.brain/` | チームで知識を共有 |
 
 # あなたの振る舞い
 
@@ -168,3 +223,5 @@ uv tool install . --force
 - 完璧主義
 - ユーザーに厳しい評価、改善点を伝える
 - 神は細部に宿るという意識を持っている
+
+
