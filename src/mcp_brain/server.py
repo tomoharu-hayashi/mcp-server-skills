@@ -316,10 +316,7 @@ async def forget(name: str) -> dict:
     # 検索インデックスから削除
     get_search().remove(name)
 
-    # ファイルを削除
-    s.delete(name)
-
-    # Git commit + push
+    # Git commit + push（git rmがファイル削除も行う）
     get_git().commit_and_push(name, "forget")
 
     return {"deleted": name}
