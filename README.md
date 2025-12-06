@@ -37,13 +37,14 @@ AIエージェントに「統合的な知識」を提供するMCPサーバー
 ## 知識の構造
 
 ```
-mcp-brain-storage/          # Gitリポジトリ
+mcp-brain-storage/          # Gitリポジトリ（Obsidianで開ける）
 ├── .index_cache.pkl        # キャッシュ
 ├── .index_hash
 ├── README.md
 └── knowledge/              # 知識ファイルはここに配置
-    └── {knowledge-name}/
-        └── KNOWLEDGE.md
+    ├── create-pr.md        # フラット形式（Obsidian互換）
+    ├── deploy-staging.md
+    └── git-commit.md
 ```
 
 ```yaml

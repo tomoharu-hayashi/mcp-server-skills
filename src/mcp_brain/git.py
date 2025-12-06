@@ -81,12 +81,12 @@ class GitManager:
             self._commit_manual_changes()
 
             # 3. 今回の変更をステージング・コミット
-            # 知識ファイルはknowledge/以下に配置
-            knowledge_path = Path("knowledge") / name / "KNOWLEDGE.md"
+            # フラット構造: knowledge/{name}.md
+            knowledge_path = f"knowledge/{name}.md"
             if action == "forget":
-                self.repo.index.remove([str(knowledge_path)], working_tree=True)
+                self.repo.index.remove([knowledge_path], working_tree=True)
             else:
-                self.repo.index.add([str(knowledge_path)])
+                self.repo.index.add([knowledge_path])
 
             message = f"{action}: {name}"
             self.repo.index.commit(message)

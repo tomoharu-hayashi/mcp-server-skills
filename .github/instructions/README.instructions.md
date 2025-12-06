@@ -112,7 +112,7 @@ get(name="create-pr", hops=2)
       "description": "変更をコミットしたいとき",
       "related": [
         {"name": "git-push", "description": "リモートにプッシュしたいとき", "related": []}
-      ]
+     ]
     }
   ]
 }

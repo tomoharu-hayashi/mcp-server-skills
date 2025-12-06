@@ -18,8 +18,8 @@ def compute_content_hash(knowledge_dir: Path) -> str:
     if not knowledge_dir.exists():
         return hasher.hexdigest()
 
-    # 全KNOWLEDGE.mdファイルの内容をハッシュ
-    knowledge_files = sorted(knowledge_dir.rglob("KNOWLEDGE.md"))
+    # 全.mdファイルの内容をハッシュ（フラット構造）
+    knowledge_files = sorted(knowledge_dir.glob("*.md"))
     for f in knowledge_files:
         hasher.update(str(f.relative_to(knowledge_dir)).encode())
         hasher.update(f.read_bytes())
