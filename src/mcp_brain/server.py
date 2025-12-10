@@ -11,7 +11,11 @@ from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager, GitNotAvailableError, GitOperationError
 from .models import Knowledge, validate_project_name
-from .notification import show_create_confirmation, show_stale_dialog
+from .notification import (
+    edit_content_with_textedit,
+    show_create_confirmation,
+    show_stale_dialog,
+)
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
 
@@ -233,11 +237,18 @@ async def create(
     if not show_create_confirmation(name, description):
         raise ValueError("ユーザーが作成をキャンセルしました")
 
+    # TextEditで全文を開いて編集（キャンセル時は中断）
+    edited_content = edit_content_with_textedit(
+        name=name, description=description, content=content_markdown
+    )
+    if edited_content is None:
+        raise ValueError("ユーザーが作成をキャンセルしました")
+
     # 知識の作成（バリデーションエラーはそのままraise）
     knowledge = Knowledge(
         name=name,
         description=description,
-        content=content_markdown,
+        content=edited_content,
         project=project,
     )
 
