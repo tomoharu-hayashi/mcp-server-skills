@@ -108,6 +108,34 @@ def show_stale_dialog(stale_names: list[str]) -> bool:
         return False
 
 
+def show_update_confirmation(name: str, description: str) -> bool:
+    """知識更新の確認ダイアログを表示"""
+    play_sosumi()
+    safe_name = _escape_applescript(name)
+    safe_desc = _escape_applescript(description)
+
+    script = f"""
+    display dialog "以下の知識を更新しますか？\\n\\n\
+名前: {safe_name}\\n説明: {safe_desc}" ¬
+        with title "MCP Brain: 知識の更新確認" ¬
+        buttons {{"キャンセル", "更新する"}} default button "更新する" ¬
+        with icon note
+    """
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return "更新する" in result.stdout
+    except subprocess.TimeoutExpired:
+        return False
+    except Exception:
+        return False
+
+
 def edit_content_with_textedit(
     name: str, description: str, content: str, timeout: int = 300
 ) -> str | None:

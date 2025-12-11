@@ -15,6 +15,7 @@ from .notification import (
     edit_content_with_textedit,
     show_create_confirmation,
     show_stale_dialog,
+    show_update_confirmation,
 )
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
@@ -294,11 +295,27 @@ async def update(
     if knowledge is None:
         raise ValueError(f"Knowledge '{name}' not found")
 
+    # 更新確認ダイアログ
+    if not show_update_confirmation(name, knowledge.description):
+        raise ValueError("ユーザーが更新をキャンセルしました")
+
     # 更新を適用
     if description is not None:
         knowledge.description = description
-    if content_markdown is not None:
-        knowledge.content = content_markdown
+
+    # VS Codeで内容を編集（入力があればそれを初期値に、なければ現行本文）
+    initial_content = (
+        content_markdown if content_markdown is not None else knowledge.content
+    )
+    edited_content = edit_content_with_textedit(
+        name=name,
+        description=knowledge.description,
+        content=initial_content,
+    )
+    if edited_content is None:
+        raise ValueError("ユーザーが更新をキャンセルしました")
+    knowledge.content = edited_content
+
     if project is not None:
         knowledge.project = validate_project_name(project)
 
