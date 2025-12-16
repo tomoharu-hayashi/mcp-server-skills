@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "./.cursor/hooks/brain_inject.py"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "make fmt lint"
+      }
+    ],
+    "stop": [
+      {
+        "command": "make test"
+      }
+    ]
+  }
+}

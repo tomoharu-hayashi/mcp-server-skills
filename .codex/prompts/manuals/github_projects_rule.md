@@ -1,7 +1,3 @@
----
-applyTo: " "
----
-<!-- Description: Github Projectsを参照したいときに使用する -->
 # Github Projects 管理ルール
 
 ## 管理場所
