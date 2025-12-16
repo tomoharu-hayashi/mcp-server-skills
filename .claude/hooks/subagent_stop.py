@@ -4,6 +4,7 @@
 import json
 import sys
 from pathlib import Path
+
 from brain_client import search_and_get
 
 
@@ -14,7 +15,7 @@ def extract_query_from_transcript(transcript_path: str) -> str:
         return ""
 
     messages = []
-    with open(path) as f:
+    with path.open(encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line)
@@ -28,7 +29,7 @@ def extract_query_from_transcript(transcript_path: str) -> str:
     return messages[-1][:200] if messages else ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
 
@@ -49,14 +50,10 @@ Hooksにより現在の会話をクエリとして、過去のナレッジが自
 {knowledge}
 ---""",
             }
-            print(json.dumps(output))
+            sys.stdout.write(f"{json.dumps(output)}\n")
     except Exception:
         pass
 
 
 if __name__ == "__main__":
     main()
-
-
-
-

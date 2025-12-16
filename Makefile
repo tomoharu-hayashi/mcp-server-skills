@@ -5,6 +5,10 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 SCRIPTS_DIR ?= scripts
+ARGS ?=
+PYTEST_ARGS ?= -n auto --cov
+RUFF_ARGS ?= .
+PYRIGHT_ARGS ?=
 
 .PHONY: help
 help: ## コマンド一覧
@@ -13,27 +17,38 @@ help: ## コマンド一覧
 .PHONY: doctor
 doctor: ## 開発に必要なコマンド/環境のざっくりチェック
 	@command -v git >/dev/null || (echo "missing: git" && exit 1)
+	@command -v uv >/dev/null || (echo "missing: uv" && exit 1)
+	@python -c 'import sys; assert sys.version_info[:2] == (3, 13), sys.version' >/dev/null
 	@echo "ok: basic"
 
 .PHONY: deps
-deps: ## 依存導入（PJに合わせて実装）
-	@echo "TODO: implement deps"
+deps: ## 依存導入（dev含む）
+	@uv sync --group dev
+
+.PHONY: dev
+dev: ## 開発起動（mcp-brain）
+	@uv run mcp-brain $(ARGS)
 
 .PHONY: run
-run: ## 実行（dev起動など）
-	@echo "TODO: implement run"
+run: dev ## dev の別名
 
 .PHONY: test
 test: ## テスト
-	@echo "implement test"
+	@uv run python -m pytest $(PYTEST_ARGS)
 
 .PHONY: fmt
 fmt: ## フォーマット
-	@echo "TODO: implement fmt"
+	@uv run ruff check --fix $(RUFF_ARGS)
+	@uv run ruff format $(RUFF_ARGS)
 
 .PHONY: lint
 lint: ## リント/静的解析
-	@echo "TODO: implement lint"
+	@uv run ruff format --check $(RUFF_ARGS)
+	@uv run ruff check $(RUFF_ARGS)
+	@uv run python -m pyright $(PYRIGHT_ARGS)
+
+.PHONY: check
+check: lint test ## lint + test
 
 .PHONY: clean
 clean: ## 生成物削除

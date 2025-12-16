@@ -137,6 +137,18 @@ git remote add origin git@github.com:your-name/mcp-brain-knowledge.git
 uv tool install . --force
 ```
 
+## 開発コマンド
+
+```bash
+make help
+make doctor
+make deps
+make lint
+make fmt
+make test
+make dev ARGS="--help"
+```
+
 ## 設定
 
 ### 共通知識（全プロジェクトで共有）
