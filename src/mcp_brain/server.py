@@ -11,12 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .git import GitManager, GitNotAvailableError, GitOperationError
 from .models import Knowledge, validate_project_name
-from .notification import (
-    edit_content_with_textedit,
-    show_create_confirmation,
-    show_stale_dialog,
-    show_update_confirmation,
-)
+from .notification import show_create_confirmation, show_stale_dialog
 from .search import SemanticSearch
 from .storage import KnowledgeStorage
 
@@ -53,7 +48,7 @@ mcp = FastMCP(
 
 タスク開始時:
 1. search で過去の経験を想起
-2. 見つかれば get で詳細を思い出す
+2. 見つかれば get で思い出し、その通りに実行
 3. 新しい経験は create で記憶、失敗から学んだら update で強化""",
 )
 
@@ -133,9 +128,6 @@ async def search(query: str, project: str = "global") -> list[dict]:
         project: リポジトリ名（kebab-case）または "global"。
                  プロジェクト固有の知識はそのリポジトリ名、
                  汎用的な知識は "global" を指定。
-
-    Returns:
-        知識サマリーのリスト: [{"name", "description", "project"}, ...]
     """
     play_sound()
 
@@ -159,16 +151,11 @@ async def search(query: str, project: str = "global") -> list[dict]:
 
 @mcp.tool()
 async def get(name: str, hops: int = 2) -> dict:
-    """記憶を思い出す。過去の経験の詳細を取得する。
+    """記憶を思い出す。過去の経験の詳細を取得し、その通りに実行する。
 
     Args:
         name: searchで見つけた知識名
         hops: 連想する関連記憶の深さ（デフォルト: 2、最大: 5）
-
-    Returns:
-        知識の詳細と関連知識:
-        - name, description, project, content, version: 知識本体
-        - related: Embeddingで自動検出した関連知識（hopsの深さまで再帰展開）
     """
     play_sound()
 
@@ -204,15 +191,15 @@ async def get(name: str, hops: int = 2) -> dict:
 
 @mcp.tool()
 async def create(
-    name: str, description: str, content_markdown: str, project: str = "global"
+    name: str, description: str, instructions_markdown: str, project: str = "global"
 ) -> dict:
-    """新しい知識を記録。再利用できる経験や知見を保存する。
+    """新しい知識を記録。タスク成功後、再利用できる手順を保存する。
 
     ここでの「経験」を記録する。AIが元々知っている一般知識ではなく、
-    実際にここで試行錯誤して得た知見や、ユーザーから教わった情報を保存する。
+    実際にここで試行錯誤して得た知見や、ユーザーから教わった手順を保存する。
 
     例:
-    - ○ ここ固有のデプロイ方法（特殊な環境変数、独自スクリプト）
+    - ○ ここ固有のデプロイ手順（特殊な環境変数、独自スクリプト）
     - ○ ユーザーが「こうやって」と教えてくれたワークフロー
     - × git の一般的な使い方（AIは既に知っている）
     - × React公式ドキュメントに書いてある内容
@@ -220,13 +207,10 @@ async def create(
     Args:
         name: kebab-case識別名（例: "deploy-staging"）
         description: いつ使うか（例: "ステージング環境にデプロイしたいとき"）
-        content_markdown: 知識の内容をMarkdownで記述
+        instructions_markdown: 手順をMarkdownで記述
         project: リポジトリ名（kebab-case）または "global"。
                  プロジェクト固有の知識はそのリポジトリ名、
                  汎用的な知識は "global" を指定。
-
-    Returns:
-        作成した知識: {name, description, project, content, version}
     """
     s = get_storage()
 
@@ -238,18 +222,11 @@ async def create(
     if not show_create_confirmation(name, description):
         raise ValueError("ユーザーが作成をキャンセルしました")
 
-    # TextEditで全文を開いて編集（キャンセル時は中断）
-    edited_content = edit_content_with_textedit(
-        name=name, description=description, content=content_markdown
-    )
-    if edited_content is None:
-        raise ValueError("ユーザーが作成をキャンセルしました")
-
     # 知識の作成（バリデーションエラーはそのままraise）
     knowledge = Knowledge(
         name=name,
         description=description,
-        content=edited_content,
+        content=instructions_markdown,
         project=project,
     )
 
@@ -283,11 +260,8 @@ async def update(
     Args:
         name: 更新する知識名
         description: 説明・使用タイミング（任意）
-        content_markdown: 知識の内容（任意）
+        content_markdown: 知識の手順・詳細（任意）
         project: リポジトリ名（kebab-case）または "global"（任意）
-
-    Returns:
-        更新後の知識: {name, description, project, content, version}
     """
     play_sound()
     s = get_storage()
@@ -295,27 +269,11 @@ async def update(
     if knowledge is None:
         raise ValueError(f"Knowledge '{name}' not found")
 
-    # 更新確認ダイアログ
-    if not show_update_confirmation(name, knowledge.description):
-        raise ValueError("ユーザーが更新をキャンセルしました")
-
     # 更新を適用
     if description is not None:
         knowledge.description = description
-
-    # VS Codeで内容を編集（入力があればそれを初期値に、なければ現行本文）
-    initial_content = (
-        content_markdown if content_markdown is not None else knowledge.content
-    )
-    edited_content = edit_content_with_textedit(
-        name=name,
-        description=knowledge.description,
-        content=initial_content,
-    )
-    if edited_content is None:
-        raise ValueError("ユーザーが更新をキャンセルしました")
-    knowledge.content = edited_content
-
+    if content_markdown is not None:
+        knowledge.content = content_markdown
     if project is not None:
         knowledge.project = validate_project_name(project)
 
@@ -346,9 +304,6 @@ async def forget(name: str) -> dict:
 
     Args:
         name: 削除する知識名
-
-    Returns:
-        削除結果: {"deleted": name}
     """
     play_sound()
     s = get_storage()

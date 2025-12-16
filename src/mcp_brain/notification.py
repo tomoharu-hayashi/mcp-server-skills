@@ -1,10 +1,6 @@
 """macOS ネイティブ通知"""
 
-import shutil
 import subprocess
-import tempfile
-from contextlib import suppress
-from pathlib import Path
 
 
 def _escape_applescript(text: str) -> str:
@@ -106,82 +102,3 @@ def show_stale_dialog(stale_names: list[str]) -> bool:
         return False
     except Exception:
         return False
-
-
-def show_update_confirmation(name: str, description: str) -> bool:
-    """知識更新の確認ダイアログを表示"""
-    play_sosumi()
-    safe_name = _escape_applescript(name)
-    safe_desc = _escape_applescript(description)
-
-    script = f"""
-    display dialog "以下の知識を更新しますか？\\n\\n\
-名前: {safe_name}\\n説明: {safe_desc}" ¬
-        with title "MCP Brain: 知識の更新確認" ¬
-        buttons {{"キャンセル", "更新する"}} default button "更新する" ¬
-        with icon note
-    """
-
-    try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        return "更新する" in result.stdout
-    except subprocess.TimeoutExpired:
-        return False
-    except Exception:
-        return False
-
-
-def edit_content_with_textedit(
-    name: str, description: str, content: str, timeout: int = 300
-) -> str | None:
-    """VS Codeで全文を開いて編集してもらう。開けなければNoneを返す。"""
-    # 未使用引数だがシグネチャ互換のため保持
-    _ = (name, description, timeout)
-    # VS Codeが読みやすい場所に一時ファイルを作成（/tmp配下、644権限）
-    tmp_dir = Path("/tmp/mcp-brain")
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w", delete=False, suffix=".md", encoding="utf-8", dir=tmp_dir
-    ) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-
-    tmp_path.chmod(0o644)
-
-    def _launch_with_code() -> bool:
-        """VS Codeで開く。code --waitがあれば同期、なければopen -aで非同期。"""
-        if shutil.which("code"):
-            try:
-                subprocess.run(
-                    ["code", "--wait", str(tmp_path)],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                return True
-            except Exception:
-                return False
-
-        with suppress(Exception):
-            subprocess.Popen(["open", "-a", "Visual Studio Code", str(tmp_path)])
-            return True
-        return False
-
-    # VS Codeのみで開く（TextEditフォールバックはなし）
-    if _launch_with_code():
-        edited: str | None = None
-        with suppress(Exception), tmp_path.open("r", encoding="utf-8") as f:
-            edited = f.read()
-        with suppress(OSError):
-            tmp_path.unlink()
-        return edited
-
-    # VS Codeが起動できなかった場合はNoneを返す
-    with suppress(OSError):
-        tmp_path.unlink()
-    return None
