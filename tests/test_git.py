@@ -170,7 +170,10 @@ def test_commit_and_push_commits_manual_changes_and_pushes_with_rebase(
 
     manager.commit_and_push("x", "create")
 
-    assert repo.index.added == [["knowledge/x.md"]]
+    assert repo.index.added == [
+        ["knowledge/x.md"],
+        [".index_cache.pkl", ".index_hash"],
+    ]
     assert repo.index.commits == ["manual: uncommitted changes", "create: x"]
     assert remote.pull_calls == 1
     assert remote.push_calls == 2
@@ -186,6 +189,7 @@ def test_commit_and_push_forget_removes_file(monkeypatch, tmp_path) -> None:
     manager.commit_and_push("x", "forget")
 
     assert repo.index.removed == [(["knowledge/x.md"], True)]
+    assert repo.index.added == [[".index_cache.pkl", ".index_hash"]]
     assert repo.index.commits == ["forget: x"]
 
 

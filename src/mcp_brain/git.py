@@ -88,6 +88,9 @@ class GitManager:
             else:
                 self.repo.index.add([knowledge_path])
 
+            # インデックスキャッシュも一緒にコミット
+            self.repo.index.add([".index_cache.pkl", ".index_hash"])
+
             message = f"{action}: {name}"
             self.repo.index.commit(message)
             logger.info("Committed: %s", message)
