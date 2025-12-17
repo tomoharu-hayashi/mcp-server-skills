@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / ".claude" / "hooks"
 from brain_client import search_and_get
 
 
-def main() -> None:
+def main():
     data = json.load(sys.stdin)
     prompt = data.get("prompt", "")
 
@@ -23,7 +23,7 @@ Hooksにより現在の会話をクエリとして、過去のナレッジが自
 ---
 {knowledge}
 ---"""
-    sys.stdout.write(f"{json.dumps(output)}\n")
+    print(json.dumps(output))
 
 
 if __name__ == "__main__":

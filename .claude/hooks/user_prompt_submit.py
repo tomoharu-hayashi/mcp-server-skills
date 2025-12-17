@@ -3,24 +3,21 @@
 
 import json
 import sys
-
 from brain_client import search_and_get
 
 
-def main() -> None:
+def main():
     try:
         data = json.load(sys.stdin)
         knowledge = search_and_get(data.get("prompt", ""))
 
         if knowledge:
-            sys.stdout.write(
-                f"""[自動取得: Brain MCP Server]
+            print(f"""[自動取得: Brain MCP Server]
 Hooksにより現在の会話をクエリとして、過去のナレッジが自動検索されました。
 必要に応じて参考にしてください（必須ではありません）。
 ---
 {knowledge}
----"""
-            )
+---""")
     except Exception:
         pass
 
