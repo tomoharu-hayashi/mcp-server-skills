@@ -3,6 +3,7 @@
 
 import json
 import sys
+
 from brain_client import search_and_get
 
 

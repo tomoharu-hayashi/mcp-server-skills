@@ -2,18 +2,35 @@
 
 import re
 from datetime import date
+from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
 # 知識名の正規表現: kebab-case（英数字とハイフンのみ）
 KNOWLEDGE_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-# プロジェクト名の正規表現: kebab-case または "global"
-PROJECT_NAME_PATTERN = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*|global)$")
+# プロジェクトベースディレクトリ
+PJ_BASE_DIR = Path.home() / "pj"
+
+
+def get_valid_project_names() -> set[str]:
+    """~/pj 以下の全プロジェクトフォルダ名を取得"""
+    if not PJ_BASE_DIR.exists():
+        return set()
+
+    projects = set()
+    # ~/pj 直下のカテゴリ（my, work, other）を走査
+    for category in PJ_BASE_DIR.iterdir():
+        if category.is_dir() and not category.name.startswith("."):
+            # カテゴリ内のプロジェクトフォルダを追加
+            for project in category.iterdir():
+                if project.is_dir() and not project.name.startswith("."):
+                    projects.add(project.name)
+    return projects
 
 
 def validate_project_name(v: str) -> str:
-    """プロジェクト名のバリデーション（kebab-case または 'global'）
+    """プロジェクト名のバリデーション
 
     Args:
         v: プロジェクト名
@@ -26,12 +43,20 @@ def validate_project_name(v: str) -> str:
     """
     if not v:
         raise ValueError("project cannot be empty")
-    if not PROJECT_NAME_PATTERN.match(v):
-        raise ValueError(
-            f"Invalid project '{v}': must be kebab-case (e.g., 'my-app') or 'global'"
-        )
     if len(v) > 100:
         raise ValueError("project is too long (max 100 characters)")
+
+    # "global"は常に許可
+    if v == "global":
+        return v
+
+    # ~/pj 以下に存在するプロジェクト名のみ許可
+    valid_projects = get_valid_project_names()
+    if v not in valid_projects:
+        raise ValueError(
+            f"Invalid project '{v}': must be 'global' or an existing project in ~/pj. "
+            f"Available: {sorted(valid_projects)}"
+        )
     return v
 
 

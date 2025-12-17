@@ -106,10 +106,10 @@ class TestModels:
             name="test-with-project",
             description="プロジェクト付きテスト",
             content="詳細",
-            project="my-app",
+            project="mcp-server-brain",
         )
         summary = knowledge.to_summary()
-        assert summary.project == "my-app"
+        assert summary.project == "mcp-server-brain"
 
     def test_knowledge_default_project(self):
         """Knowledgeのデフォルトproject"""
@@ -124,30 +124,25 @@ class TestModels:
 class TestProjectValidation:
     """プロジェクト名バリデーションのテスト"""
 
-    def test_valid_project_names(self):
-        """有効なプロジェクト名"""
-        valid_names = ["my-app", "project123", "mcp-server-brain", "global"]
-        for name in valid_names:
-            knowledge = Knowledge(
-                name="test",
-                description="test",
-                project=name,
-            )
-            assert knowledge.project == name
+    def test_valid_project_global(self):
+        """globalは常に有効"""
+        knowledge = Knowledge(name="test", description="test", project="global")
+        assert knowledge.project == "global"
 
-    def test_invalid_project_uppercase(self):
-        """大文字は無効"""
+    def test_valid_project_existing(self):
+        """~/pj以下に存在するプロジェクトは有効"""
+        # 実際に存在するプロジェクト名を使用
+        knowledge = Knowledge(
+            name="test", description="test", project="mcp-server-brain"
+        )
+        assert knowledge.project == "mcp-server-brain"
+
+    def test_invalid_project_not_exists(self):
+        """存在しないプロジェクトは無効"""
         import pytest
 
-        with pytest.raises(ValueError, match="must be kebab-case"):
-            Knowledge(name="test", description="test", project="MyApp")
-
-    def test_invalid_project_underscore(self):
-        """アンダースコアは無効"""
-        import pytest
-
-        with pytest.raises(ValueError, match="must be kebab-case"):
-            Knowledge(name="test", description="test", project="my_app")
+        with pytest.raises(ValueError, match="Invalid project"):
+            Knowledge(name="test", description="test", project="nonexistent-project")
 
     def test_invalid_project_empty(self):
         """空文字は無効"""
@@ -156,29 +151,26 @@ class TestProjectValidation:
         with pytest.raises(ValueError, match="cannot be empty"):
             Knowledge(name="test", description="test", project="")
 
-    def test_invalid_project_space(self):
-        """スペースは無効"""
-        import pytest
-
-        with pytest.raises(ValueError, match="must be kebab-case"):
-            Knowledge(name="test", description="test", project="my app")
-
 
 class TestProjectSorting:
     """プロジェクトソートのテスト"""
 
     def test_project_sorting_logic(self):
         """プロジェクト一致 → global → その他の順でソートされる"""
-        # KnowledgeSummaryのリストを作成
+        # KnowledgeSummaryは直接作成可能（バリデーションなし）
         results = [
-            KnowledgeSummary(name="k1", description="other", project="other-project"),
+            KnowledgeSummary(name="k1", description="other", project="jarvis"),
             KnowledgeSummary(name="k2", description="global", project="global"),
-            KnowledgeSummary(name="k3", description="matched", project="my-app"),
+            KnowledgeSummary(
+                name="k3", description="matched", project="mcp-server-brain"
+            ),
             KnowledgeSummary(name="k4", description="global2", project="global"),
-            KnowledgeSummary(name="k5", description="matched2", project="my-app"),
+            KnowledgeSummary(
+                name="k5", description="matched2", project="mcp-server-brain"
+            ),
         ]
 
-        project = "my-app"
+        project = "mcp-server-brain"
 
         # ソートロジック（server.py と同じ）
         matched = [r for r in results if r.project == project]
@@ -186,7 +178,7 @@ class TestProjectSorting:
         others = [r for r in results if r.project not in (project, "global")]
         sorted_results = matched + global_ + others
 
-        # 検証: my-app が先、次に global、最後に other
+        # 検証: mcp-server-brain が先、次に global、最後に other
         assert sorted_results[0].name == "k3"
         assert sorted_results[1].name == "k5"
         assert sorted_results[2].name == "k2"
@@ -204,13 +196,13 @@ class TestProjectStorage:
         knowledge = Knowledge(
             name="project-knowledge",
             description="プロジェクト付き知識",
-            project="my-awesome-app",
+            project="simple-ai-chat",
         )
         storage.save(knowledge)
 
         loaded = storage.load("project-knowledge")
         assert loaded is not None
-        assert loaded.project == "my-awesome-app"
+        assert loaded.project == "simple-ai-chat"
 
     def test_load_without_project_defaults_to_global(self, tmp_path):
         """projectフィールドがない既存知識はglobalになる"""
