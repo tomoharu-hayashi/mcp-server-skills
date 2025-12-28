@@ -1,58 +1,62 @@
 # Makefile (AI開発向け・汎用・薄いルーター)
 # 方針: Makefileは「入口」だけ。重い実体は scripts/ に逃がす。
+# スクリプト配置:
+#   - .prompts/scripts/  : テンプレートリポジトリから提供（pr-review, pr-checks-wait等）
+#   - scripts/           : プロジェクト固有（この下に追加）
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 SCRIPTS_DIR ?= scripts
-ARGS ?=
-PYTEST_ARGS ?= -n auto --cov
-RUFF_ARGS ?= .
-PYRIGHT_ARGS ?=
+PR ?= $(shell gh pr view --json number --jq .number 2>/dev/null)
 
 .PHONY: help
 help: ## コマンド一覧
-	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z0-9_%-]+:.*##/{printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN{FS=":.*##"} /^[a-zA-Z0-9_%-]+:.*##/{printf "%-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: doctor
 doctor: ## 開発に必要なコマンド/環境のざっくりチェック
 	@command -v git >/dev/null || (echo "missing: git" && exit 1)
-	@command -v uv >/dev/null || (echo "missing: uv" && exit 1)
-	@python -c 'import sys; assert sys.version_info[:2] == (3, 13), sys.version' >/dev/null
 	@echo "ok: basic"
 
 .PHONY: deps
-deps: ## 依存導入（dev含む）
-	@uv sync --group dev
-
-.PHONY: dev
-dev: ## 開発起動（mcp-brain）
-	@uv run mcp-brain $(ARGS)
+deps: ## 依存導入（PJに合わせて実装）
+	@echo "TODO: implement deps"
 
 .PHONY: run
-run: dev ## dev の別名
+run: ## 実行（dev起動など）
+	@echo "TODO: implement run"
 
 .PHONY: test
 test: ## テスト
-	@uv run python -m pytest $(PYTEST_ARGS)
+	@echo "implement test"
 
 .PHONY: fmt
 fmt: ## フォーマット
-	@uv run ruff check --fix $(RUFF_ARGS)
-	@uv run ruff format $(RUFF_ARGS)
+	@echo "TODO: implement fmt"
 
 .PHONY: lint
 lint: ## リント/静的解析
-	@uv run ruff format --check $(RUFF_ARGS)
-	@uv run ruff check $(RUFF_ARGS)
-	@uv run python -m pyright $(PYRIGHT_ARGS)
-
-.PHONY: check
-check: lint test ## lint + test
+	@echo "TODO: implement lint"
 
 .PHONY: clean
 clean: ## 生成物削除
 	@rm -rf .tmp .cache dist build coverage 2>/dev/null || true
+	@find . -path "./.git" -prune -o -name ".DS_Store" -type f -delete
+	@find . -path "./.git" -prune -o -type d -empty -delete
+
+.PHONY: pr-review
+pr-review: ## PRのレビュー/コメントを全取得
+	@bash ".prompts/scripts/pr_review.sh"
+
+.PHONY: pr-checks-wait
+pr-checks-wait: ## PRのCIチェックをポーリング（TIMEOUT秒で打ち切り、デフォルト: 1800）
+	@bash ".prompts/scripts/pr_checks_wait.sh"
+
+.PHONY: pr-merge
+pr-merge: ## PRを即時マージ
+	@test -n "$(PR)" || (echo "PR not found. Set PR=<number> or checkout a PR branch." && exit 1)
+	@gh pr merge "$(PR)" --squash
 
 # ---- プロジェクト固有の新規コマンド（この下に追加）----
 # Example:

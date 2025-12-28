@@ -23,20 +23,7 @@
 		{
 			"label": ".DS_Storeファイルと空ディレクトリの削除",
 			"type": "shell",
-			"command": "find ./src -name \".DS_Store\" -type f -delete && find ./src -type d -empty -delete"
-		},
-		{
-			"label": "Build",
-			"dependsOn": [
-				".DS_Storeファイルと空ディレクトリの削除",
-				"Lint",
-				"code2prompt"
-			],
-			"dependsOrder": "sequence",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"command": "find . -path \"./.git\" -prune -o -name \".DS_Store\" -type f -delete && find . -path \"./.git\" -prune -o -type d -empty -delete"
 		}
 	]
 }

@@ -3,6 +3,12 @@
   "hooks": {
     "beforeSubmitPrompt": [
       {
+        "command": "python3 ./.cursor/hooks/jarvis_prompt_arm.py"
+      },
+      {
+        "command": "python3 ./.cursor/hooks/make_help_inject.py"
+      },
+      {
         "command": "./.cursor/hooks/brain_inject.py"
       }
     ],
@@ -13,7 +19,7 @@
     ],
     "stop": [
       {
-        "command": "make test"
+        "command": "python3 ./.cursor/hooks/jarvis_autoloop.py"
       }
     ]
   }

@@ -14,22 +14,21 @@ def _configure_pycache_prefix() -> None:
 
 def main() -> None:
     _configure_pycache_prefix()
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / ".claude" / "hooks"))
     from brain_client import search_and_get
 
     data = json.load(sys.stdin)
     prompt = data.get("prompt", "")
 
     knowledge = search_and_get(prompt)
-    output = {"continue": True}
     if knowledge:
-        output["user_message"] = f"""[自動取得: Brain MCP Server]
+        sys.stdout.write(
+            f"""[自動取得: Brain MCP Server]
 Hooksにより現在の会話をクエリとして、過去のナレッジが自動検索されました。
 必要に応じて参考にしてください（必須ではありません）。
 ---
 {knowledge}
 ---"""
-    sys.stdout.write(json.dumps(output) + "\n")
+        )
 
 
 if __name__ == "__main__":
